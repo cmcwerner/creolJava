@@ -1,8 +1,6 @@
 import java.util.ArrayList;
 import java.lang.reflect.Method;
 
-
-
 class CreoleObject extends Thread {
   private ArrayList<CreoleCall> calls = new ArrayList<CreoleCall>();
   private ArrayList<CreoleCall> suspended = new ArrayList<CreoleCall>(); // tasks that volunarily suspended

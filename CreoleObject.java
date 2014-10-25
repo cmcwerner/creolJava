@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 class CreoleObject extends Thread {
   private ArrayList<CreoleCall> calls = new ArrayList<CreoleCall>();
   private ArrayList<CreoleCall> suspended = new ArrayList<CreoleCall>(); // tasks that volunarily suspended
+  private ArrayList<CreoleCall> futureWait = new ArrayList<CreoleCall>(); // tasks that did await(future) and the future still no ready
   private CreoleCall current = null;
   CreoleObject() {
     this.start();
@@ -29,24 +30,59 @@ class CreoleObject extends Thread {
   
   Object creoleAwait(Future fut) {
     // busy waits only if nothing else to do
-    while(!fut.ready) {
-      creoleSuspend();
-    }
-    return fut.get();
-  }
+//    while(!fut.ready) {
+//      creoleSuspend();
+//    }
+//    return fut.get();
+//    
+    // put on a queue like with suspend and also put in the list for the future
+    // when the futures becomes ready it will tell each in the list to move from waiting to suspended
+    if (!fut.ready) {
+      CreoleCall waiter = current;
+      boolean ready;
+      synchronized(fut) {
+        ready = fut.addWaiter(current); // returns the current value of ready - if true then it was not put in the future queue
+        
+      }
+      if (!ready) {
+        moveToQueue(futureWait);
   
-  void creoleSuspend() {
+        assert (fut.ready);
+        // move waiter from futureAwait to supsended
+        synchronized (this) {
+          boolean success = futureWait.remove(waiter);
+          assert(success);
+          if (current == null) {
+            current = waiter;
+          }
+          else {
+            suspended.add(waiter);
+          }
+
+        }
+        if (current != waiter) {
+          tryToSleep(waiter);
+        }
+      }
+    }
+    return fut.get();           
+  }
+  private void moveToQueue(ArrayList<CreoleObject.CreoleCall> queue) {
     CreoleCall suspendee;
     // first put it in the suspended queue and mark this object as not busy, waking up the dispatcher
     synchronized(this) {
       assert(current!=null);
       suspendee = current;
-      suspended.add(current);
+      queue.add(current);
       current = null; // no longer busy
       notify(); 
     }
 
     // now actully put this thread to sleep but make sure it didn't get woken up immediately by the dispatcher
+    tryToSleep(suspendee);
+  }
+  
+  private void tryToSleep(CreoleCall suspendee) {
     synchronized(suspendee) {
       if (!suspendee.wakingUp) {
         try {
@@ -62,6 +98,10 @@ class CreoleObject extends Thread {
       }
       suspendee.wakingUp = false;
     }
+  }
+  
+  void creoleSuspend() {
+    moveToQueue(suspended);
   }
   
   public void run() {
@@ -88,16 +128,7 @@ class CreoleObject extends Thread {
             call.notify();
           }
         }
-        // nothing to do but wait
-//        else {
-//          synchronized (this) {
-//            // something may have come in since last check so make sure no calls before going to sleep
-//            if (calls.size() == 0) {
-//              System.out.println(this.getClass() + " waiting no calls.");
-//              wait();
-//            }
-//          }
-//        }
+
         // If there is an active call or nothing to do, just wait
         // need to recheck the two queue lengths because something could have come in since checked above
         synchronized (this) {

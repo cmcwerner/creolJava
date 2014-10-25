@@ -18,6 +18,12 @@ class Future {
     value = val;
     ready = true;
     notifyAll();
+    for (CreoleObject.CreoleCall call : waiters) {
+      synchronized(call) {
+        call.wakingUp = true; // otherwise might miss this notify - there is a race
+        call.notify();
+      }
+    }
   }
   synchronized Object get() { 
     try {
@@ -29,5 +35,17 @@ class Future {
       System.out.println(e);
     }
     return value;
+  }
+  synchronized boolean addWaiter(CreoleObject.CreoleCall call) {
+//    if (call == null) {
+//      System.out.println("trouble");
+//    }
+    if (ready) {
+      return true;
+    }
+    else {
+      waiters.add(call);
+      return false;
+    }
   }
 }

@@ -10,7 +10,7 @@ class CreoleObject extends Thread {
     this.start();
   }
   
-  synchronized Future invoke(String method, Object... args) {
+  public synchronized Future invoke(String method, Object... args) {
     Future fut = new Future();
     CreoleCall newCall = new CreoleCall(method, fut, args);
     calls.add(newCall);
@@ -19,14 +19,14 @@ class CreoleObject extends Thread {
     return fut;
   }
   
-  synchronized void invokeVoid(String method, Object... args) {
+  public synchronized void invokeVoid(String method, Object... args) {
     CreoleCall newCall = new CreoleCall(method, null, args);
     calls.add(newCall);
     debug("new call added " + this.getClass() + " " + method);
     notify();
   }
   
-  Object creoleAwait(Future fut) {
+  public Object creoleAwait(Future fut) {
     // busy waits only if nothing else to do
 //    while(!fut.ready) {
 //      creoleSuspend();

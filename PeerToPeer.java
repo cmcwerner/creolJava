@@ -3,6 +3,20 @@ class PeerToPeer {
 
 class PeerNode {
   
+  Set<String> enquire() {
+    return await(db.listFiles());
+  }
+  
+  int getLength(String fileId) {
+    return awiat(db.getLength(fileId)); // length in units of packages
+  }
+  
+  Pack getPack(String fileId, int packageNum) {
+    ArrayList<Package> file;
+    file = await(db.getFile(fileId));
+    return file.get(packageNum-1); // switch to 0 indexing just here
+  }
+  
   void reqFile(Server serverId, String fileId) {
     ArrayList<Package> file = new ArrayList<Package>();
     Package pack;

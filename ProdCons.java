@@ -1,6 +1,11 @@
 import java.util.ArrayList;
 
-enum News {E1, E2, E3, E4, E5, None}
+//enum News {E1, E2, E3, E4, E5, None}
+class News {
+  int item;
+  News(int x) { item = x;}
+  public String toString() {return item+"";}
+}
 
 class ProdCons {
   public static void main(String[] args) {
@@ -15,9 +20,14 @@ class ProdCons {
     c = new Client();
     srv.subscribe(c);
     
-    np.add(News.E1);
-    np.add(News.E2);
-    np.add(News.E3);
+    int count = 0;
+    while(count < 1000) {
+      np.add(new News(++count));
+      try {
+        Thread.currentThread().sleep((int)(Math.random()*100));
+      }
+      catch (InterruptedException e) {}
+    }
   }
 }
 class Service extends CreoleObject {
@@ -66,7 +76,7 @@ class Proxy extends CreoleObject {
   }
   
   public void publish(Future fut) {
-    News ns = News.None;
+    News ns = new News(0);
  //   ns = (News)fut.get();
     ns = (News)creoleAwait(fut);
     // invoke(myClients.signal(ns));
@@ -88,13 +98,17 @@ class Producer extends CreoleObject{
     this.np = np;
   }
   public News detectNews () {
-    News news = News.None;
+    News news = new News(0);
     int requests = (Integer)np.invoke("getRequests").get();
     while (requests == 0) {
+      try {
+        sleep(500);
+      }
+      catch (InterruptedException e) {}
       requests = (Integer)np.invoke("getRequests").get();
     }
-    news = np.getNews();
-    this.creoleSuspend(); // wasteful - just to see if it keeps running - nothing else for it to do
+    news = (News)np.invoke("getNews").get();
+ //   this.creoleSuspend(); // wasteful - just to see if it keeps running - nothing else for it to do
     return news; // put??
   }
 }
@@ -116,10 +130,10 @@ class NewsProducer extends CreoleObject{
 
 
 class Client extends CreoleObject{
-  private News news = News.None;
+  private News news = new News(0);
   
   public void signal(News ns) { 
     news = ns;
-    System.out.println("Extra Extra!" + news);
+    System.out.println(news);
   }
 }

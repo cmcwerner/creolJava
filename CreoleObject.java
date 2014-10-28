@@ -14,7 +14,7 @@ class CreoleObject extends Thread {
     Future fut = new Future();
     CreoleCall newCall = new CreoleCall(method, fut, args);
     calls.add(newCall);
-    System.out.println("new call added " + this.getClass() + " " +method);
+    debug("new call added " + this.getClass() + " " +method);
     notify();
     return fut;
   }
@@ -22,7 +22,7 @@ class CreoleObject extends Thread {
   synchronized void invokeVoid(String method, Object... args) {
     CreoleCall newCall = new CreoleCall(method, null, args);
     calls.add(newCall);
-    System.out.println("new call added " + this.getClass() + " " + method);
+    debug("new call added " + this.getClass() + " " + method);
     notify();
   }
   
@@ -36,29 +36,34 @@ class CreoleObject extends Thread {
     // put on a queue like with suspend and also put in the list for the future
     // when the futures becomes ready it will tell each in the list to move from waiting to suspended
     if (!fut.ready) {
+      assert(current != null);
       CreoleCall waiter = current;
-      boolean ready;
+      boolean ready; // might have become ready since the check just above - will need to check again for sleeping
       synchronized(fut) {
-        ready = fut.addWaiter(current); // returns the current value of ready - if true then it was not put in the future queue
-        
+        ready = fut.addWaiter(current); // returns the current value of ready - if true then it was not put in the future queue       
       }
       if (!ready) {
-        moveToQueue(futureWait);
-  
+        // this call has been recorded in the waiters list for fut and the future was not ready at that time, although
+        // we are out of the atomic section so it could have become ready by now
+        moveToQueue(futureWait); // put in a queue and wait. will also set current to null and notify the dispatcher
+        // we have been woken up becuase the future is not ready
         assert (fut.ready);
-        // move waiter from futureAwait to supsended
+        // move waiter from futureWait to supsended
         synchronized (this) {
           boolean success = futureWait.remove(waiter);
           assert(success);
           if (current == null) {
+            // there was no active call so make this one the active call
             current = waiter;
           }
           else {
+            // there is already an active call in this object so put this one in the suspended queue
             suspended.add(waiter);
           }
-
         }
+        // if this isn't the active current call then put this thread to sleep (it is in the suspended queue)
         if (current != waiter) {
+          assert(suspended.contains(waiter));
           tryToSleep(waiter);
         }
       }
@@ -78,6 +83,8 @@ class CreoleObject extends Thread {
 
     // now actully put this thread to sleep but make sure it didn't get woken up immediately by the dispatcher
     tryToSleep(suspendee);
+    // back from sleeping. This call has been scheduled as the active call in this object
+    assert(suspendee == current || queue == futureWait);
   }
   
   private void tryToSleep(CreoleCall suspendee) {
@@ -131,7 +138,7 @@ class CreoleObject extends Thread {
         // need to recheck the two queue lengths because something could have come in since checked above
         synchronized (this) {
           if (current != null || (calls.size() == 0 && suspended.size() == 0)) {
-            System.out.println(this.getClass() + " waiting a call is active.");
+            debug(this.getClass() + " waiting a call is active.");
             wait();
           }
         }
@@ -163,7 +170,7 @@ class CreoleObject extends Thread {
       }
     }
     private void invoke() {
-      System.out.println("processing call " + this.getClass() + " " + method);
+      debug("processing call " + this.getClass() + " " + method);
       Method m = null;
       try {
         // create array of classes representing the types of the args
@@ -181,11 +188,11 @@ class CreoleObject extends Thread {
           if (fut != null) {
             Object result = m.invoke(CreoleObject.this,args);
             fut.set(result);
-            System.out.println("Setting future " + this.getClass() + " " + method);
+            debug("Setting future " + this.getClass() + " " + method);
           }
           else {
             m.invoke(CreoleObject.this,args);
-            System.out.println("end of void method " + this.getClass() + " " + method);
+            debug("end of void method " + this.getClass() + " " + method);
           }
         }
         catch (Exception e) {
@@ -195,5 +202,7 @@ class CreoleObject extends Thread {
     }
   }
   
-  
+  void debug(String msg) {
+    //System.out.println(msg);
+  }
 }

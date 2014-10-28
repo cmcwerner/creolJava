@@ -181,7 +181,7 @@ class CreoleObject extends Thread {
         m = CreoleObject.this.getClass().getMethod(method,types);
       }
       catch (NoSuchMethodException e) {
-        System.out.println(e);
+        e.printStackTrace(System.out);
       }
       if (m != null) {
         try {

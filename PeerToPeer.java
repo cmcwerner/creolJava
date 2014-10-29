@@ -3,6 +3,7 @@ import java.util.Set;
 import java.util.HashMap;
 import java.util.HashSet;
 
+@SuppressWarnings("unchecked")
 class PeerToPeer extends CreoleObject {
   public static void main(String[] args) {
     new PeerToPeer();
@@ -36,16 +37,23 @@ class PeerToPeer extends CreoleObject {
     nodes[0].invokeVoid("reqFile",nodes[1], "file1");
     nodes[0].invokeVoid("reqFile",nodes[2], "file2");
     
-    for(int x = 1; x <= 3; x++) {
+    for(int x = 1; x <= 2; x++) {
       for (int i = 0; i < dbs.length; i++) {
         dbs[i].dump();
       }
       try {
         sleep(1000);
       }
-      catch (InterruptedException e) {}
-      
-      
+      catch (InterruptedException e) {}    
+    }
+    // now let's try out availFiles
+    HashMap<Server,Set<String>> catalog = (HashMap<Server,Set<String>>)nodes[1].invoke("availFiles", servers).get();
+    System.out.println("avail files");
+    for (Server srv : catalog.keySet()) {
+      System.out.println(srv);
+      for (String fn: catalog.get(srv)) {
+        System.out.println(fn);
+      }
     }
   }
 }
@@ -67,7 +75,6 @@ class PeerNode extends CreoleObject implements Server {
     return (Package)file.get(packageNum-1); // switch to 0 indexing just here
   }
   
-//  void reqFile(Server serverId, String fileId) {
   public void reqFile(PeerNode serverId, String fileId) {
     ArrayList<Package> file = new ArrayList<Package>();
     Package pack;
@@ -83,6 +90,7 @@ class PeerNode extends CreoleObject implements Server {
   }
   
   public HashMap<Server,Set<String>> availFiles(ArrayList<Server> serverList) {
+    serverList = (ArrayList<Server>)serverList.clone(); // until I think of a better time or place to make the copy
     Future futFileList;
     Future futServerFileMap;
     Set<String> fileList = new HashSet<String>();
@@ -118,8 +126,8 @@ class DB extends CreoleObject {
   public void storeFile(String fileId, ArrayList<Package> data) {
     store.put(fileId, data); // at some point I should probably copy the data to avoid modification
   }
-  public ArrayList<String> listFiles() {
-    return new ArrayList<String>(store.keySet());    
+  public Set<String> listFiles() {
+    return new HashSet<String>(store.keySet());    
   }
   
   void dump() {
@@ -131,9 +139,6 @@ class DB extends CreoleObject {
       }
     }
   }
-}
-
-class Admin {
 }
 
 class Package {

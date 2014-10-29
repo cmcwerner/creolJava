@@ -17,7 +17,8 @@ class Future {
     assert(!ready);
     value = val;
     ready = true;
-    notifyAll();
+    notifyAll(); // wake up threads blocked in get()
+    // wake up threads blocked via await
     for (CreoleObject.CreoleCall call : waiters) {
       synchronized(call) {
         call.wakingUp = true; // otherwise might miss this notify - there is a race

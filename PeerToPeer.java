@@ -10,7 +10,7 @@ class PeerToPeer extends CreoleObject {
   }
   public void run() {
     // make some nodes in the network
-    int numNodes = 3;
+    int numNodes = 10;
     PeerNode[] nodes = new PeerNode[numNodes];
     
     DB[] dbs = new DB[numNodes];
@@ -20,7 +20,8 @@ class PeerToPeer extends CreoleObject {
       fileName = "file"+i;
       file = new ArrayList<Package>();
       dbs[i] = new DB();
-      for (int p = 1; p<= 5; p++) {
+      int size = (int)(Math.random()*10) + 1;
+      for (int p = 1; p<= size; p++) {
         file.add(new Package("package " + p + " of " + fileName));
       }
       dbs[i].storeFile(fileName, file);
@@ -33,10 +34,12 @@ class PeerToPeer extends CreoleObject {
     for (Server srv : nodes) {
       servers.add(srv);
     }
-    
-    nodes[0].invokeVoid("reqFile",nodes[1], "file1");
-    nodes[0].invokeVoid("reqFile",nodes[2], "file2");
-    
+    for (int i = 0; i < numNodes; i++) {
+      for (int j = i+1; j < numNodes; j++) {
+        nodes[i].invokeVoid("reqFile", nodes[j], "file"+j);
+      }
+    }
+
     for(int x = 1; x <= 2; x++) {
       for (int i = 0; i < dbs.length; i++) {
         dbs[i].dump();

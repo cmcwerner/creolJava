@@ -186,7 +186,7 @@ class CreoleObject extends Thread {
       this.args = args;
     }
     
-    public void run() {
+    final public void run() {
       debug("processing call " + method + ":"+current + ":" + this);
       invoke();
       // call is over - notify the dispatcher that it can schedule another

@@ -6,9 +6,9 @@ import java.util.HashSet;
 @SuppressWarnings("unchecked")
 class PeerToPeer extends CreoleObject {
   public static void main(String[] args) {
-    new PeerToPeer();
+    new PeerToPeer().test();
   }
-  public void run() {
+  public void test() {
     // make some nodes in the network
     int numNodes = 10;
     PeerNode[] nodes = new PeerNode[numNodes];

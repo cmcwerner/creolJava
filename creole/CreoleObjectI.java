@@ -1,3 +1,5 @@
+package creole;
+
 interface CreoleObjectI {
   
   Future invoke(String method, Object... args) ;

@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import creole.*;
 
 //enum News {E1, E2, E3, E4, E5, None}
 class News {

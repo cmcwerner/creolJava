@@ -1,7 +1,8 @@
+package creole;
 import java.util.ArrayList;
 import java.lang.reflect.Method;
 
-class CreoleObject extends Thread {
+public class CreoleObject extends Thread {
   static private int nextId = 0;
   final int id = ++nextId;
   private ArrayList<CreoleCall> calls = new ArrayList<CreoleCall>();

@@ -1,6 +1,8 @@
+package creole;
+
 import java.util.ArrayList;
 
-class Future {
+public class Future {
   boolean ready = false;
   Object value;
   // a list of calls that performed an await on this future
@@ -26,7 +28,7 @@ class Future {
       }
     }
   }
-  synchronized Object get() { 
+  public synchronized Object get() { 
     try {
       if (!ready) {
         wait();

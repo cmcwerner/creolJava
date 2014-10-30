@@ -1,3 +1,5 @@
+import creole.*;
+
 class Demo extends CreoleObject{
   public static void main(String[] args) {
     new Demo().test();

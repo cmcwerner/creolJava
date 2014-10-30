@@ -9,7 +9,7 @@ public class CreoleObject extends Thread {
   private ArrayList<CreoleCall> suspended = new ArrayList<CreoleCall>(); // tasks that volunarily suspended
   private ArrayList<CreoleCall> futureWait = new ArrayList<CreoleCall>(); // tasks that did await(future) and the future still no ready
   private CreoleCall current = null;
-  CreoleObject() {
+  protected CreoleObject() {
     this.start();
   }
   
@@ -117,7 +117,7 @@ public class CreoleObject extends Thread {
     }
   }
   
-  void creoleSuspend() {
+  public void creoleSuspend() {
     moveToQueue(suspended);
   }
   

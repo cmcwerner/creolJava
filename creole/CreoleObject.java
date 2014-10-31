@@ -22,16 +22,7 @@ public class CreoleObject extends Thread {
     debug("new call added " + this.getClass() + " " +method);
     notify();
     return fut;
-  }
-  
-  public synchronized void invokeVoidx(String method, Object... args) {
-    CreoleCall newCall = new CreoleCall(method, null, args);
-    calls.add(newCall);
-    debug("new call added " + this.getClass() + " " + method);
-    notify();
-  }
-  
-  
+  }  
   
   public Object creoleAwait(Future fut) {
     // busy waits only if nothing else to do

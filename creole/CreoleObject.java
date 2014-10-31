@@ -8,7 +8,9 @@ public class CreoleObject extends Thread {
   private ArrayList<CreoleCall> calls = new ArrayList<CreoleCall>();
   private ArrayList<CreoleCall> suspended = new ArrayList<CreoleCall>(); // tasks that volunarily suspended
   private ArrayList<CreoleCall> futureWait = new ArrayList<CreoleCall>(); // tasks that did await(future) and the future still no ready
+  private ArrayList<CreoleCall> condWait = new ArrayList<CreoleCall>(); // tasks that did creoleAwait() - awaken only if something happens 
   private CreoleCall current = null;
+  
   protected CreoleObject() {
     this.start();
   }
@@ -22,12 +24,14 @@ public class CreoleObject extends Thread {
     return fut;
   }
   
-  public synchronized void invokeVoid(String method, Object... args) {
+  public synchronized void invokeVoidx(String method, Object... args) {
     CreoleCall newCall = new CreoleCall(method, null, args);
     calls.add(newCall);
     debug("new call added " + this.getClass() + " " + method);
     notify();
   }
+  
+  
   
   public Object creoleAwait(Future fut) {
     // busy waits only if nothing else to do
@@ -82,9 +86,13 @@ public class CreoleObject extends Thread {
     }
     return fut.get();           
   }
+  
+  /* moves the current call to the specified queue (currently either suspended or futureWait
+   * and then has the thread(call) wait.
+   */
   private void moveToQueue(ArrayList<CreoleObject.CreoleCall> queue) {
     CreoleCall suspendee;
-    // first put it in the suspended queue and mark this object as not busy, waking up the dispatcher
+    // first put it in the appropriate queue and mark this object as not busy, waking up the dispatcher
     synchronized(this) {
       assert current!=null : id;
       suspendee = current;
@@ -92,7 +100,7 @@ public class CreoleObject extends Thread {
       current = null; // no longer busy
       notify(); // wake up the dispatcher to find something else to do
     }
-
+    
     // now actully put this thread to sleep but make sure it didn't get woken up immediately by the dispatcher
     tryToSleep(suspendee);
     // back from sleeping. This call has been scheduled as the active call in this object
@@ -121,6 +129,18 @@ public class CreoleObject extends Thread {
     moveToQueue(suspended);
   }
   
+  // this is like creoleSuspend() except that it won't be reawakened until some object state has potentially changed
+  public void creoleAwait() {
+    moveToQueue(condWait);
+  }
+  
+  void wakeUpCondWaiters() {
+    synchronized(this) {
+      suspended.addAll(condWait);
+      condWait.clear();      
+    }
+  }
+  
   public void run() {
     try {
       while (true) {
@@ -135,6 +155,7 @@ public class CreoleObject extends Thread {
               assert(call != null);
               current = call; // now busy
               debug("busy: starting " + current + ":" + this);
+              wakeUpCondWaiters();
               call.start();
             }
           }
@@ -147,6 +168,7 @@ public class CreoleObject extends Thread {
               current = call; // now busy
               assert(current != null);
               debug("busy: resuming " + current + ":" + this);
+              wakeUpCondWaiters();
             }
             synchronized (call) {
               call.wakingUp = true;
@@ -154,7 +176,7 @@ public class CreoleObject extends Thread {
             }
           }
         }
-
+        
         // If there is an active call or nothing to do, just wait
         // need to recheck the two queue lengths because something could have come in since checked above
         synchronized (this) {

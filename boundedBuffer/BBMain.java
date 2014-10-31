@@ -9,7 +9,7 @@ class BBMain extends CreoleObject{
     Producer prod = new Producer();
     Consumer cons = new Consumer();
     
-    prod.invokeVoid("startProducing",buf);
-    cons.invokeVoid("startConsuming",buf);
+    prod.invoke("startProducing",buf);
+    cons.invoke("startConsuming",buf);
   }
 }

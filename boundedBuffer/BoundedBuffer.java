@@ -1,24 +1,22 @@
 import creole.*;
 
 public class BoundedBuffer extends CreoleObject {
-  int head, tail, cnt;
-  Item[] buf;
+  private int head, tail, cnt;
+  private Item[] buf;
   BoundedBuffer(int size) {
     buf = new Item[size];
   }
-  public Object insert(Item item) {
-    while (cnt >= buf.length) {
-      creoleSuspend();
-    }
+  // CreoleObject methods that can be invoked by other CreoleObjects must be public
+  // because they are actually being called by name from the CreoleObject class
+  // which is in a separate package.
+   public void insert(Item item) {
+    while (cnt >= buf.length) creoleAwait();
     buf[head] = item;
     head = (head+1)%buf.length;
     cnt++; 
-    return new Object();
   }
-  public Item remove() {
-    while (cnt <= 0) {
-      creoleSuspend();
-    }
+   public Item remove() {
+    while (cnt <= 0) creoleAwait();
     Item result = buf[tail];
     tail = (tail+1)%buf.length;
     cnt--;

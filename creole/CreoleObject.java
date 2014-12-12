@@ -3,6 +3,7 @@ import java.util.ArrayList;
 import java.lang.reflect.Method;
 
 public class CreoleObject extends Thread {
+      public static int activeCalls;
   static private int nextId = 0;
   final int id = ++nextId;
   private ArrayList<CreoleCall> calls = new ArrayList<CreoleCall>();
@@ -201,6 +202,7 @@ public class CreoleObject extends Thread {
     }
     
     final public void run() {
+      activeCalls++;
       debug("processing call " + method + ":"+current + ":" + this);
       invoke();
       // call is over - notify the dispatcher that it can schedule another
@@ -209,6 +211,7 @@ public class CreoleObject extends Thread {
         current = null; // no longer busy
         CreoleObject.this.notify();
       }
+      activeCalls--;
     }
     private void invoke() {
       Method m = null;
@@ -243,6 +246,6 @@ public class CreoleObject extends Thread {
   }
   
   void debug(String msg) {
-    //System.out.println("dbg " +id + msg);
+   // System.out.println("dbg " +id + msg);
   }
 }

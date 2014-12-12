@@ -31,8 +31,8 @@ public class Proxy extends CreoleObject {
   
   public void publish(Future fut) {
     // insert some silly useless call that makes a get to a already filled future
-    Future trivial = this.invoke("silly");
-    int x = (Integer)creoleAwait(trivial);
+   // Future trivial = this.invoke("silly");
+  //  int x = (Integer)creoleAwait(trivial);
     
     // send the news item to each of this proxies clients
     for (Client c : myClients) {

@@ -8,7 +8,8 @@ class ProdCons extends CreoleObject {
   void main() {
     NewsProducer np = new NewsProducer();
 
-    Service srv = new Service(4, np);
+    Future fut = np.invoke("getNews");
+    Service srv = new Service(4, fut);
     
     Client c = new Client();
     srv.invoke("subscribe",c);
@@ -18,16 +19,19 @@ class ProdCons extends CreoleObject {
     srv.invoke("subscribe",c);
     
     int count = 0;
-    while(count < 100) {
+
+    while(count < 1000) {
       System.out.println("active calls " + CreoleObject.activeCalls);
-      np.invoke("add",new News(++count));
+     // np.invoke("add",new News(++count));
       try {
         //Thread.currentThread().sleep((int)(Math.random()*100));
         sleep((int)(Math.random()*100));
       }
       catch (InterruptedException e) {}
     }
+      System.exit(0);
   }
+
 }
 
 

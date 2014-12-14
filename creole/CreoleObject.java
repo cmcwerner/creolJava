@@ -202,7 +202,9 @@ public class CreoleObject extends Thread {
     }
     
     final public void run() {
-      activeCalls++;
+      synchronized(CreoleObject.this.getClass()){
+        activeCalls++;
+      }
       debug("processing call " + method + ":"+current + ":" + this);
       invoke();
       // call is over - notify the dispatcher that it can schedule another
@@ -211,7 +213,9 @@ public class CreoleObject extends Thread {
         current = null; // no longer busy
         CreoleObject.this.notify();
       }
-      activeCalls--;
+      synchronized(CreoleObject.this.getClass()){
+        activeCalls--;
+      }
     }
     private void invoke() {
       Method m = null;

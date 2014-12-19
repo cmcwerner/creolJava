@@ -19,6 +19,10 @@ public class Service extends CreoleObject {
   
   public void produce() {
     prod.invoke("detectNews");
+     try {
+        sleep(300);
+      }
+      catch (InterruptedException e) {}
     proxy.invoke("publish",globalNews); 
   }
 }

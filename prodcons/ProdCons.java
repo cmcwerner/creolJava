@@ -19,6 +19,7 @@ class ProdCons extends CreoleObject {
     
     int count = 0;
     while(count < 100) {
+      System.out.println("active calls " + CreoleObject.activeCalls);
       np.invoke("add",new News(++count));
       try {
         //Thread.currentThread().sleep((int)(Math.random()*100));

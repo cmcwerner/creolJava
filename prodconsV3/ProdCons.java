@@ -7,6 +7,7 @@ class ProdCons extends CreoleObject {
   }
   void main() {
     NewsProducer np = new NewsProducer();
+    np.invoke("add",new News(99));
 
     Future fut = np.invoke("getNews");
     Service srv = new Service(4, fut);

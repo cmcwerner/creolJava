@@ -8,6 +8,6 @@ public class Client extends CreoleObject{
     // becomes available rather than in the order that the futures arrive
     news = (News)creoleAwait(futureNews);
  //   news = (News)futureNews.get();
-    System.out.println(news);
+  //  System.out.println("news: " + news);
   }
 }

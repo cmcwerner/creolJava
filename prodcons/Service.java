@@ -12,7 +12,7 @@ public class Service extends CreoleObject {
   }
   
   public void subscribe(Client cl) {
-    lastProxy = lastProxy.add(cl);
+    lastProxy = (Proxy)lastProxy.invoke("add",cl).get();
   }
   
   public void produce() {

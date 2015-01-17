@@ -1,0 +1,423 @@
+\documentclass[12pt]{article}%[preprint],%a4paper,English
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{framed}
+
+\pdfoutput=1
+
+\input{preamble}
+\definecolor{shadecolor}{rgb}{0.9,0.9,0.9}
+\newcommand{\Blue}[1] {\textcolor{blue}{#1}}%{\textsf{#1}}%
+\input{definitions}    
+\input{opsemDefs}
+%
+\newcommand{\knip}{\vspace{-1.5mm}}
+\newcommand{\OLDFOOT}[1]{}%{\OO{TODO: #1}}
+%\newcommand{\IFLONG}[1]{}%{\OO{TODO: #1}}
+\newcommand{\TODO}[1]{}%{\OO{TODO: #1}}
+\newcommand{\oo}{object-oriented\xspace}%{\textsf{#1}}%
+\newcommand{\get}{get\xspace}%{\textsf{#1}}%
+\renewcommand{\NEW}[1]{#1}%{\Blue{#1}}%{\textcolor{blue}{\textit {#1}}}%{\textsf{#1}}% {#1}
+%\renewcommand{\RED}[1]{\textcolor{magenta}{#1}}
+
+
+%\begin{frontmatter}
+
+\begin{document}
+
+\title{On detecting over-eager concurrency  in  asynchronously communicating  concurrent objects%
+\thanks{This work was done in the context of the EU projects
+   FP7-610582  \emph{Envisage: Engineering Virtualized Services}
+    (\texttt{http://www.envisage-project.eu}) and
+FP7-ICT-2013-X \emph{UpScale: From Inherent Concurrency to Massive 
+Parallelism through Type-based Optimizations}
+  (\texttt{http://www.upscale-project.eu}).}}
+
+\author{Charlie McDowell and Olaf Owe\\
+ \small{University of California, Santa Cruz, Dept.\ of Computer Science, USA, }\\
+ \small{and University of Oslo, Dept.\  of Informatics Norway} 
+ }
+\date{\today}
+\maketitle
+
+\lstset{language=ABS}
+\lstset{basicstyle=\ttfamily}
+\ignore{
+\lstset{backgroundcolor=\color{codebg}}
+\lstset{frame=single}
+\lstset{framesep=10pt}
+\lstset{rulecolor=\color{codeframe}}
+\lstset{upquote=true}
+
+}
+
+\lstset{emph={awk}, emphstyle=\textbf}
+
+\section{Introduction}
+Here ... flushing cycles
+
+Creol (and others) have suggested the use of concurrent objects
+communicating via asynchronous method calls and futures, as a pathway
+to better reasoning about concurrent systems. The communication and
+synchronization model of Creol simplifies deadlock detection, allows
+for ...
+
+These advantages do not come without a price.  Although not unique to
+programs created using Creol style synchronization, this programming
+style does make it quite easy to create programs that are semantically
+correct but that fail due to over eager creation of suspended method
+calls.
+
+
+We ignore flooding caused by direct recursion,
+since this is not considered a cuncurrency problem.
+\section{Flooding Cycles}
+
+As a motivating example we will
+consider  versions of the publish/subscribe example.
+%taken from \cite{din14jlap}.
+Clients may  \lstinline{subscribe} to a service object
+and the service object will ensure 
+that subscribing objects receive information about ``news''.
+Clients are notified by news by 
+%The interface of Clients contains
+ the   \lstinline{signal} method.
+%for this purpose. 
+%Clints call \lstinline{subscribe} on the 
+The service object is using a number of proxies to 
+handle all the clients and is using  an underlying news producer
+to obtain news. The service object is using futures to avoid
+being delayed by waiting for news to be available,
+thus it may continously respond to clients.
+The  interfaces of these units are given 
+in figure \ref{example-subscr-interfaces}.
+
+\begin{figure}
+%Example
+\begin{abs}
+data News=E1|E2|E3|E4|E5|None;    $\hfill$ // example of different news
+interface ServiceI{
+  Void subscribe(ClientI cl);     $\hfill$ // called by Clients
+  Void produce()}                 $\hfill$ // called by Proxies
+interface ProxyI{
+  ProxyI add(ClientI cl);         $\hfill$ // called by Service objects
+  Void publish(Fut<News> fut)}    $\hfill$ // called by Service objects
+interface ProducerI{
+  News detectNews()}              $\hfill$ // called by Service objects
+interface NewsProducerI{
+  Void add(News ns);              $\hfill$ // called by main when news arrive
+  News getNews();                 $\hfill$ // called by Producer objects
+//  List<News>getRequests()}     // not used !
+interface ClientI{
+  Void signal(News ns)}           $\hfill$ // called by Proxies
+\end{abs}
+\caption{\label{example-subscr-interfaces}
+The interfaces to complete the subscription example.}
+\end{figure}
+ %=========================================
+
+A high-level Creol implementation of 
+%the example of
+ the publish/subscribe model is given in 
+figure \ref{example-subscr} and is taken from Din and Owe\cite{din14jlap}.
+
+
+\begin{figure}
+%Example
+\begin{abs}
+class Service(Intlimit,NewsProducerInp) implements ServiceI{
+  ProducerI prod;ProxyIproxy;ProxyIlastProxy;
+  { prod := new Producer(np); 
+    proxy:= new Proxy(limit,this);lastProxy:=proxy;this!produce()}
+  Void subscribe(ClientIcl){lastProxy:=lastProxy.add(cl)}
+  Void produce(){var Fut<News>fut:=prod!detectNews();proxy!publish(fut)}}
+
+class Proxy(Intlimit,ServiceIs) implements ProxyI{
+  List<ClientI> myClients:=Nil;ProxyInextProxy;
+  ProxyI add(ClientIcl){
+    var ProxyI lastProxy=this;
+    if length(myClients)<limit then myClients:=appendright(myClients,cl)
+    else if nextProxy==null then nextProxy:= new Proxy(limit,s) fi;
+             lastProxy:=nextProxy.add(cl) fi;
+    put lastProxy}
+  Void publish(Fut<News>fut){
+    var News ns=None;
+    ns =fut.get; myClients!signal(ns);
+    if nextProxy==null then s!produce() else nextProxy!publish(fut) fi}}
+
+class Producer(NewsProducerI np) implements ProducerI{
+  News detectNews(){
+    News news:=None;
+    news:=np.getNews(); put news}}
+class NewsProducer implements NewsProducerI{
+  List<News>requests:=Nil;
+  Void add(News ns){requests:=appendright(requests,ns)}
+  News getNews(){
+    var News firstNews:=None; await requests /= Nil;
+    firstNews := head(requests);requests:=tail(requests); put firstNews}
+ }
+
+class Client implements ClientI{
+  Newsnews:=None;
+  Void signal(News ns){news:=ns}}
+
+\end{abs}
+\caption{\label{example-subscr}
+A simple subscription example.}
+\end{figure}
+ %=========================================
+
+Modifying Client and Proxy as shown in figure \ref{example-subscr-flooding}, results in a program that will flood the system with suspended calls. 
+The changes are at lines 9 and 14 in the revised code.
+The change is to shift requiring the actual news to have arrived from the Proxy (\lstinline{ns=fut.get; myClients!signal(ns);})
+to the Client (\lstinline{news:=fut.get}).
+
+
+\begin{figure}
+%Example
+\begin{abs}
+class Proxy(Intlimit,ServiceIs) implements ProxyI{
+  List<ClientI> myClients:=Nil;ProxyInextProxy;
+  ProxyIadd(ClientIcl){
+    var ProxyIlastProxy=this;
+    if length(myClients)<limit then myClients:=appendright(myClients,cl)
+    else if nextProxy==null then nextProxy:= new Proxy(limit,s) fi;
+    lastProxy:=nextProxy.add(cl) fi; put lastProxy}
+  Void publish(Fut<News>fut){
+    myClients!signal(fut);
+    if nextProxy==null then s!produce() else nextProxy!publish(fut) fi}}
+
+class Client implements ClientI{
+  News news:=None;
+  Void signal(Fut<News> fut){news:=fut.get}}
+
+\end{abs}
+\caption{\label{example-subscr-flooding}
+A flooding variation of the subscription example.}
+\end{figure}
+ %=========================================
+
+This seemingly minor change, and one that would even seem to make sense in the interest of maximizing concurrency, is in
+fact ``too much.'' We might naively take it even one step further and have the client instead do 
+\lstinline{news:=await(fut)}, 
+which has the additional advantage of allowing the Client to process the news items as they become available, rather then in
+the order that the futures were received. In either case, the following sequence of calls can occur, which constitute a
+flooding cycle (see definition \ref{flooding-cycle}).
+\\
+
+{\small
+\samepage
+%\begin{center}\begin{flushleft}%{verbatim}
+\indent\lstinline{Service.produce} asynchronously calls \lstinline{Producer.detectNews}
+\\
+\indent\lstinline{Service.produce} asynchronously calls \lstinline{Proxy.publish}
+\\
+\indent\lstinline{Proxy.publish} asynchronously calls \lstinline{Client.signal}
+\\
+\indent\lstinline{Proxy.publish} asynchronously calls \lstinline{Service.produce}
+%\end{flushleft}\end{center}%{verbatim}
+}\\
+
+\noindent
+Each pass around this cycle, the asynchronous call to \lstinline{Proxy.publish} is processed as part of the cycle (step 3).
+However, each pass around this cycle also spawns an asynchronous call to  \lstinline{Producer.detectNews} that is not processed as part of this cycle,
+nor is there any attempt to synchronize this cycle with the completion of those calls to  \lstinline{Producer.detectNews}.
+Depending upon the speed of
+execution of the code along the path of the cycle, such a cycle can create an unbounded number of suspended calls to
+\lstinline{Producer.detectNews}.
+
+We call such sequences flooding-cycles. In this paper we present an algorithm to statically identify
+programs that contain flooding-cycles. This approach is conservative in that if it reports that a program is free from
+flooding-cycles then it is indeed free of such cylces, however, it may report flooding-cycles that are in fact bounded by
+program logic, not amenable to static analysis. It will also report flooding-cycles that do not in practice produce an
+increasing number of unprocessed calls due to the execution speed of the flooding-cycle. 
+
+A flooding-cycle must always be racing against one or more specific asynchronous calls, either trivial calls (no waiting on
+any future from the call) or calls where the resulting future is not read in the cycle, although the future may be passed
+to a separate asynchronous call where it is read.  
+
+The version of the program in figure \ref{example-subscr} has a flooding-cycle (cycle B in figure \ref{graph-orig}) 
+that is racing against the \lstinline{Client.signal} calls
+generated in \lstinline{Proxy.publish}. This will not cause a problem, provided the Client objects are able to process these signal
+calls at least as fast as they are being generated. Our algorithm will alert the programmer to this situation, and the
+programmer can determine if there is a real problem here, possibly with the aid of some additional program
+instrumentation.  
+
+In this case, the flooding-cycle will not create a flood for two reasons that are beyond the ability of our current approach to detect.
+First, this cycle is in fact bounded by program logic. The cycle is walking down a finite chain of Proxy objects.
+Second, after a finite number of times around the cycle the code will branch and make a pass around the cycle that includes the 
+\lstinline{get}
+(cycle A in figure \ref{graph-orig})
+which results in a delay for more news to actually arrive, thus limiting the speed of cycle A.
+
+The version of the program in figure \ref{example-subscr-flooding}
+results in the graph shown in figure \ref{graph-modified}. This second graph is the same as that in figure \ref{graph-orig}
+except that the \lstinline{get} node is now in the  \lstinline{Client.signal}
+method (not shown in the graph) and there is no \lstinline{get} in cycle A. 
+The result is that cycle A in the modified program
+is a flooding cycle that is racing against both the
+\lstinline{Client.signal} calls and also against the
+\lstinline{Producer.detectNews} calls.  This is because rather than
+wait in \lstinline{Proxy.publish} for the news to actually be produced
+as in the first version (\lstinline{ns=fut.get;}),
+\lstinline{Proxy.publish} instead simply passes the future out to
+another asynchronous call (\lstinline{myClients!signal(fut);}),
+eliminating any progress coordination between cycle A and the
+\lstinline{Client.signal} calls. Cycle A in this version of the program is more likely to be a
+problem because it is not dependent simply on execution speed of some
+code but is dependent upon the arrival rate of news items and in
+practice will always result in the number of unprocessed calls quickly
+growing to system limits.
+
+\section{Identifying Flooding Cycles}
+
+%\section{Definition of Flooding Cycles}
+\begin{definition}
+\label{flooding-cycle}
+A \emph{flooding-cycle} is an execution cycle 
+involving one or more asynchronous calls
+such that for at least one of those calls, call it $o.m()$,
+an unbounded number of the calls to  $o.m()$ may be produced by the cycle
+before any invocation of  $o.m()$ has been completed.
+\end{definition}
+
+\ignore{
+Thus it suffices that 
+each iteration of the cycle will produce 
+one call to an object $o$ and that there is nothing in the cycle that
+ensures that the  result of this call is read or is produced.
+
+If the flooded object is outside the group this means that there must
+be a get operation in the cycle, which directly or indirectly ensures
+that a future from the generated calls is read.  If the flooded object
+is inside the group %this means that
+ there must be a get operation or a
+guard in the cycle that ensures that the operation is completed.
+
+We will below focus on the case that the flooded object is outside the
+group. This situation is particularly harmful in distributed systems
+since the flooding of an object is caused by the environment.  Thus it
+cannot easily be detected by unit testing. (In contrast, when the
+flooded object is inside the group unit testing of the group may
+reveal the problem.)  
+}
+Flooding of this kind may depend on the relative
+speed of different objects, and  may be difficult to detect even
+by testing of complete systems, due to their inherent
+non-deterministic nature.  They may show up for instance at times when
+the system load is high.
+
+%Therefore static detection of possible flooding is worthwhile.
+
+
+The top-level view of an algorithm to detect flooding-cycles is shown in figure \ref{flow-analysis}.
+We first create a control flow graph for each method where the nodes are method start nodes, method calls, get statements, 
+await statements,
+or put statements (including implicit put statements at the end of Void methods).
+All other statements are ignored. 
+In addition, the nodes are of two types,
+synchronous, or asynchronous. Synchronous nodes are get statements or await statements.
+(Need to look at an example with synchronous method calls.
+\footnote{
+A synchronous call should not pose problems in itself, but its body may make 
+problematic asynchronous calls. And gets in its body should count in the same manner as gets in the calling method. So I guess an explicit get would work, as Charlie indicated by email.}
+The Oi from a synchronous method call needs to include any asynch calls
+resulting from the execution of the method.)
+
+\begin{figure}
+\begin{shaded}
+\begin{enumerate}
+\item Build the individual control flow graphs for each method including a start node, and a node for each call, get, await, and put statements.
+\item Add call edges from call nodes to the start node of the corresponding method.
+\item Identify any cycles in the graph.
+\item Use flow analysis to compute the put edges from puts to get/await. (What is going to happen with more complex examples
+where there are multiple puts that might reach a given get?)
+\item Use flow analysis to identify any flooding cycles.
+\end{enumerate}\end{shaded}%
+\caption{\label{flow-analysis}
+Flow Analysis for Detecting Flooding-Cycles}
+\end{figure}
+
+In step 2 we connect the cfgs for each method with call edges. Note that we do not distinguish between objects, only classes.
+
+In step 3 we identify any cycles in the graph.
+
+In step 4 we add edges from put statements to get or await statements that might block on the value for that future.\footnote{If we have the ambition of ensuring that 
+there is no flooding when the algorithm finds none,
+we must ensure that a ``get'' actually waits for the future
+(``must instead of ``might'').}
+
+If there is a cycle that creates futures (including implicit Void futures for trivial calls) that are not read
+in the cycle, then there is a flooding-cycle with respect to the call that produced the unread future.
+
+After step 4 we will have a graph with start nodes, call nodes, get/await nodes, and
+put/return nodes. We will have flow edges (within a method), call edges (between methods), and put edges from put/return
+to get/await.
+
+Step 5 analysis then proceeds by picking a method start node that is part of a cycle.
+For each (in some order? Breadth First? Does it matter?\footnote{It should not matter since the we repeat until no further changes!}) flow node $N_i$ with input edge sets $P_{i,j}$, the output set $O_i$ is
+computed as shown in figure \ref{step5}. The sets $O_i$ are a modified multi-set. These are like regular sets except that an entry may be modified with
+a $*$ as in $C.m^*$ indicating that $C.m$ appears in the set ``more than once.'' For these modified multi-sets, 
+\begin{eqnarray*}
+\{X\} + X & = & \{X^*\},\\
+\{X^*\} - X & = & \{X\},\\
+\{X^*\} \bigcup \{X\} & = & \{X^*\}, and \\
+\{X^*\} \bigcap \{X\} & = & \{X\}
+\end{eqnarray*} 
+In figure \ref{step5},  $Cancel(S)$ is $S$ with the following changes:\newline
+If $S$ contains both $C.m$ and $\overline{C.m}$ remove them both.\newline
+If $S$ contains both $C.m^*$ and $\overline{C.m}$ then remove them both and add $C.m$.
+
+\begin{figure}
+\begin{shaded}
+if the node is an async call to $C.m$, $O_i \leftarrow Cancel(\bigcup_j P_{i,j} + C.m$)\newline
+else if the node is a get, $O_i \leftarrow \bigcup_i P_{i,j}$\newline
+else if the node is a put, \newline
+\hspace*{.5cm}  $O_i \leftarrow \{ \overline{C.m} \}$ where C.m is the start node of method containing the put\newline
+AND $O_k \leftarrow O_k + C.m$ for each $O_k$ that is the output set of an immediate predecessor to the current put node\newline
+otherwise $O_i \leftarrow Cancel(\bigcup_j P_{i,j})$\newline
+Repeat until there are no further changes in any $O_i$.%\newline
+\end{shaded}%
+\caption{\label{step5}%
+Flow analysis (step 5) for finding flooding cycles from the graph,
+computing the output egde set $O_i$ for a node $i$ from its input edge sets 
+$P_{i,j}$.
+}
+\end{figure}
+
+
+\begin{definition}
+\label{potential-flooding-cycle}
+There is a \em{potential flooding-cycle} if there is a
+cycle such that the intersection of $O_i$ for all $N_i$ in the cycle is non-empty. Any call in that intersection is racing with respect to the cycle.  
+\end{definition}
+Figure \ref{graph-orig} shows the state of the graph and the output sets
+after the completion of step 5 for the first version of the producer consumer problem above. To conserve space, all method names are abbreviated to the
+first letter of the class and the first letter of the method except that we use X for the class Proxy it further disambiguate it from Producer. 
+For example, Producer.detectNews is Pd and Proxy.publish is written Xp.
+
+
+
+\begin{figure}
+\includegraphics[width=15cm]{graphOrig}
+\caption{\label{graph-orig}
+The graph and output sets after the completion of step 5 for the original version of the program (figure \ref{example-subscr}).
+}
+\end{figure}
+
+\begin{figure}
+\includegraphics[width=15cm]{graphModified}
+\caption{\label{graph-modified}
+The graph and output sets after the completion of step 5 for the modified version of the program (figure \ref{example-subscr-flooding}).
+}
+\end{figure}
+
+
+\bibliographystyle{abbrv}
+%\bibliographystyle{alpha} 
+\bibliography{creol,ref}
+%\bibliography{extracted}
+
+
+\end{document}
+============================= end of file ====================================

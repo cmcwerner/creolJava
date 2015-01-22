@@ -279,7 +279,25 @@ involving one or more asynchronous calls
 such that for at least one of those calls, call it $o.m()$,
 an unbounded number of the calls to  $o.m()$ may be produced by the cycle
 before any invocation of  $o.m()$ has been completed.
-\end{definition}
+\end{definition}%
+\footnote{So iteration of the cycle \emph{ call o.m(); call o.m(); get (for one of these calls only);} will produce an unbounded number of uncompleted o.m-calls, but is NOT considered a flooding cycle since some of the call will complete.
+However, we do not want to count too much, so this might  be the best we can deal with, unless we talk about calls of a given  program location 
+ giving rise to 
+unboundedness. A definition we could statically analyse, could possibly be: 
+\begin{definition}
+\label{flooding-cycle2}
+A \emph{flooding-cycle} is an execution cycle 
+containing a call statement
+%involving one or more asynchronous calls
+%such that for at least one of those calls,  call it $o.m()$ occurring
+ at a given program location, such that 
+this statement may produce an unbounded number of  method calls  
+before any of them %invocation of  $o.m()$
+ has been completed.
+\end{definition}%
+This would mean that we need to keep track of call locations,
+in the analysis. (Or alternatively we could consider calls of a given  \emph{future variable}.)
+}
 
 \ignore{
 Thus it suffices that 
@@ -368,13 +386,16 @@ In figure \ref{step5},  $Cancel(S)$ is $S$ with the following changes:\newline
 If $S$ contains both $C.m$ and $\overline{C.m}$ remove them both.\newline
 If $S$ contains both $C.m^*$ and $\overline{C.m}$ then remove them both and add $C.m$.
 
+% I think I need to have more proper multisets and do Cancel on each Pi before combining them for Oi.
+% The union over Pi's however does a sort of max for multiples. So {X_2} U {X} is just {X_2} not {X_3}.
+
 \begin{figure}
 \begin{shaded}
 if the node is an async call to $C.m$, $O_i \leftarrow Cancel(\bigcup_j P_{i,j} + C.m$)\newline
 else if the node is a get, $O_i \leftarrow \bigcup_i P_{i,j}$\newline
 else if the node is a put, \newline
 \hspace*{.5cm}  $O_i \leftarrow \{ \overline{C.m} \}$ where C.m is the start node of method containing the put\newline
-AND $O_k \leftarrow O_k + C.m$ for each $O_k$ that is the output set of an immediate predecessor to the current put node\newline
+AND $O_k \leftarrow O_k + \overline{C.m}$ for each $O_k$ that is the output set of an immediate predecessor to the current put node\newline
 otherwise $O_i \leftarrow Cancel(\bigcup_j P_{i,j})$\newline
 Repeat until there are no further changes in any $O_i$.%\newline
 \end{shaded}%
@@ -384,33 +405,170 @@ computing the output egde set $O_i$ for a node $i$ from its input edge sets
 $P_{i,j}$.
 }
 \end{figure}
+\footnote{The AND-part could be replaced by:
+%\begin{quote}
+%\begin{shaded}
+For every node with $\{ \overline{C.m} \}$ in its output,
+$\{ \overline{C.m} \}$ should propagate to all its outputs and also to its input sets, 
+%(in not already there)
+provided the node represents a  non-blocking and non-suspending statement.
+%\end{shaded}\end{quote}
+This may be needed for instance if there are 
+trivial statements (say an asynchronous call)
+between the cycle and the get.
+We may then need to cancel less often,
+and we detect a potential flooding-cycle if a call
+%$O.m()$ 
+is a member of every  $Cancel(O_j)$ in the cycle.
+}
+%=======================================================
+\subsection{Alternative Flow Analysis (step 5)}
 
-
-\begin{definition}
-\label{potential-flooding-cycle}
-There is a \em{potential flooding-cycle} if there is a
-cycle such that the intersection of $O_i$ for all $N_i$ in the cycle is non-empty. Any call in that intersection is racing with respect to the cycle.  
-\end{definition}
-Figure \ref{graph-orig} shows the state of the graph and the output sets
-after the completion of step 5 for the first version of the producer consumer problem above. To conserve space, all method names are abbreviated to the
-first letter of the class and the first letter of the method except that we use X for the class Proxy it further disambiguate it from Producer. 
-For example, Producer.detectNews is Pd and Proxy.publish is written Xp.
+Call statements are labeled by unique positive numbers and
+put statements are labeled 0.
+Start nodes have no label and are not recorded in the analysis.
+Each edge between nodes in a cycle is assigned  a set of labels,
+initially empty.
+Each node has one or more outgoing edges, each with the same edge set,
+%set for each outgoing nodes,
+ called its \emph{output set},
+but a node may have several edges coming in, each with different label sets,
+called  \emph{input sets}.
+The flow analysis is done in two phases,
+\begin{enumerate}
+\item
+a backwards analysis inside each method body, handling 
+backward propagation of put labels,
+ and 
+\item
+a forward analysis through the graph, 
+handling forward propagation of call labels.
+\end{enumerate}\
+See details in figure \ref{step5a}.
+NOTE: There are no stars and complement/overline,
+so detection of flooding calls for a cycle should be easy.
+The call must be on all edges in the cycle.
 
 
 
 \begin{figure}
+\begin{shaded}
+
+\textbf{Backward propagation:}
+Start with a put node.
+
+The termination statement(s) (i.e., a put) of the  body  a method $m$ 
+is labeled $m$ and is propagated backwards 
+inside the method body, until it reaches 
+a node representing an
+await statement (or a blocking call?). 
+Thus, for each such node, if  $m$ is in its output set it is 
+propagated to  all input edges of the node.
+
+
+
+\textbf{Forward propagation:}
+Inherit the result of the backward phase, and 
+start with a start node.
+
+When entering the body of a method  $m$, store the set of 
+predecessor nodes (they will all be call nodes)
+in a  set $callers_m$.
+
+
+
+When passing a node $i$ representing a call inside a method body $m$, 
+add its label $n$ to the output edge set:
+$$\begin{array}{lll}
+O_i&\leftarrow& O_i \bigcup_j cancel_m(P_{i,j}) + n%\\
+\end{array}$$
+where 
+$$\begin{array}{lll}
+cancel_m(S)&= S - callers_m,& if\ m\in S\\
+cancel_m(S)&= S , &if\ m\not\in S%\\
+\end{array}$$
+% 
+If the node is a put (ending method $m$)
+$$\begin{array}{lll}
+O_i&\leftarrow& O_i \bigcup_j P_{i,j} - \{m\} %\\
+\end{array}$$
+%
+If the node is a get associated with a call $n$
+$$\begin{array}{lll}
+O_i&\leftarrow& O_i \bigcup_j  cancel_m(P_{i,j}) - \{n\}%
+\end{array}$$
+This assumes that it is detected that the get is getting the future
+defined by the call $n$.
+%\footnote
+{NOTE: No problem with termination  now,
+since the call-get  connection is given and thus $n$ will never be 
+in the output  of the node. (Right?)}
+In all other cases,
+$$\begin{array}{lll}
+O_i&\leftarrow& O_i \bigcup_j cancel_m(P_{i,j}) %\\
+\end{array}$$
+Repeat until there are no further changes in any $O_i$.%\newline
+
+(For blocking self calls, I guess the next node is the start node of (a copy) the 
+called method where put connects back to the next statement(?)
+This  means that several copies of the same body may appear in the 
+analysis if they end up differently.
+\end{shaded}%
+\caption{\label{step5a}%
+Alternative flow analysis (step 5), based on call statement labels, for finding flooding cycles from the graph,
+computing the output edge set $O_i$ for a node $i$ from its input edge sets 
+$P_{i,j}$.
+}
+\end{figure}
+
+
+
+
+\begin{definition}
+\label{potential-flooding-cycle}
+There is a \em{potential flooding-cycle} between cycle $C_i$ and call $O.m()$ if 
+$O.m()$ or $O.m*()$ is a member of every set $O_j$ in the cycle, and
+the start node for $O.m()$ is not in $C_i$.
+\end{definition}
+
+
+
+\begin{figure}[t]
 \includegraphics[width=15cm]{graphOrig}
 \caption{\label{graph-orig}
 The graph and output sets after the completion of step 5 for the original version of the program (figure \ref{example-subscr}).
 }
 \end{figure}
 
-\begin{figure}
+\begin{figure}[t]
 \includegraphics[width=15cm]{graphModified}
 \caption{\label{graph-modified}
 The graph and output sets after the completion of step 5 for the modified version of the program (figure \ref{example-subscr-flooding}).
 }
 \end{figure}
+
+Figures \ref{graph-orig} and \ref{graph-modified} show the state of the graph and the output sets
+after the completion of step 5 for the two versions of the producer consumer problem above. To conserve space, all method names are abbreviated to the
+first letter of the class and the first letter of the method except that we use X for the class Proxy it further disambiguate it from Producer. 
+For example, Producer.detectNews is Pd and Proxy.publish is written Xp.
+
+In figure \ref{graph-orig} we see that Cs (Client.signal) appears in every set of cycle A. This indicates that cycle A is a potential flooding-cycle
+with respect to Client.signal. In practice this cycle does not cause a flood because in this implementation, the amount of work required by the
+Client to complete a signal call is trivial and thus the Client objects easily keep up with the calls. Also, the rate of execution for cycle A is
+limited by the actual arrival of news items from the NewsProducer, which further limits the rate at which this cycle generates asynchronous calls to
+CLient.signal.
+
+In figure \ref{graph-orig} we also see that Xp (or Xp*) appears in every set of cycle B. However, because
+the start node for Xp is in cycle B, this is not a flooding cycle. We can see that it is in fact not a flooding cycle 
+because although each time around the cycle generates a call to Xp, each time around the cycle also results in the completion of
+one call for a net gain of zero. Even if Proxy objects are distinct (as they in fact are in this example), this would only cause 
+a flood if each of the Xp calls was somehow delayed for a non-trivial amount of time after issuing the asynchronous call as the 
+last step in the method Xp.
+
+In the modified version of the program as reflected in figure \ref{graph-modified} there is an additional flood between cycle A and
+Pd (Producer.detectNews). This flooding-cycle is serious, and in practice will flood the system almost immediately.
+Unlike in version 1, there is no get regulating the speed at which cycle A cycles. Furthermore, the Pd calls are dependent upon the
+arrival of news items not simply limited by processor execution speed.
 
 
 \bibliographystyle{abbrv}
@@ -421,3 +579,15 @@ The graph and output sets after the completion of step 5 for the modified versio
 
 \end{document}
 ============================= end of file ====================================
+
+
+output sets written after each statement, label before colon
+  Sp  3 
+1:Pd  1,3
+2:Xp  1,2,3
+           put-Sp
+  Xp  1,2,3
+  Get 1,~1,2,3
+3:Cs  1,~1,2,~2,3
+4:Sp  1,~1,2,~2,3
+          put-Xp

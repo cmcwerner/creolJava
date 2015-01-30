@@ -280,6 +280,7 @@ such that for at least one of those calls, call it $o.m()$,
 an unbounded number of the calls to  $o.m()$ may be produced by the cycle
 before any invocation of  $o.m()$ has been completed.
 \end{definition}%
+
 \footnote{So iteration of the cycle \emph{ call o.m(); call o.m(); get (for one of these calls only);} will produce an unbounded number of uncompleted o.m-calls, but is NOT considered a flooding cycle since some of the call will complete.
 However, we do not want to count too much, so this might  be the best we can deal with, unless we talk about calls of a given  program location 
  giving rise to 
@@ -327,6 +328,27 @@ the system load is high.
 
 %Therefore static detection of possible flooding is worthwhile.
 
+
+Flooding cycles that depend on unfair scheduling
+may be avoided with fair scheduling of concurrent activity and
+fair scheduling of  tasks inside one unit.
+Flooding cycles that exist even with fair scheduling
+are more serious, indicating bad programming.
+We call such flooding \emph{strong flooding}.
+%inherent, serious
+
+\ignore{
+%\section{Definition of Strong Flooding Cycles} %p
+\begin{definition}
+\label{strong-flooding-cycle}
+A \emph{strong flooding-cycle} is an execution cycle 
+involving one or more asynchronous calls
+such that for at least one of those calls, call it $o.m()$,
+an unbounded number of the calls to  $o.m()$ may be produced by the cycle
+before any invocation of  $o.m()$ has been completed,
+even with fair scheduling between concurrent units and 
+(enabled) tasks within each unit.
+\end{definition}}
 
 The top-level view of an algorithm to detect flooding-cycles is shown in figure \ref{flow-analysis}.
 We first create a control flow graph for each method where the nodes are method start nodes, method calls, \emph{get} statements, 
@@ -422,6 +444,7 @@ and we detect a potential flooding-cycle if a call
 is a member of every  $Cancel(O_j)$ in the cycle.
 }
 
+A flooding of a call $o.m$ 
 %=======================================================
 \subsection{New Alternative Flow Analysis (step 5)}
 
@@ -476,16 +499,18 @@ The analysis, uses two sets, denoted $calls$ and $comps$.
 \begin{itemize}
 \item For each call $n$ in the cycle add $n$ to $calls$.
 \item For each \emph{get} node  marked   $n$ in the cycle add   $n$ to  $comps$.
-\item For each \emph{put} node  marked   $n$ in the cycle  add   $n$ to  $comps$.
-\item  For each \emph{put} node marked   ${n}$ reachable along flow edges from the cycle, 
-without going through \emph{await} or  \emph{get} nodes,
- add   ${n}$ to  $comps$.
-\item  For each \emph{get}  marked   ${n}$ 
-leading to a \emph{put}  node
-related to a call in the cycle,
- add   ${n}$ to  $comps$.
-%\item
-%\item
+%\item For each \emph{put} node  marked   $n$ in the cycle  add   $n$ to  $comps$.
+%\item  For each \emph{put} node marked   ${n}$ reachable along flow edges from the cycle, 
+%without going through \emph{await} or  \emph{get} nodes,
+% add   ${n}$ to  $comps$.
+\item For each node with flow edges leaving the cycle where the cycle edge is an async call edge, 
+% ie not the off cycle edge in Ex2 from O.m to A.a
+if all paths involving only flow edges starting from that node lead to a put
+before encountering \emph{await} or \emph{get} nodes, then add ${n}$ to $comps$,
+%see Ex7 for multiple paths one that reaches the put and one that does not resulting in a flood of calls to B.
+where ${n}$ is the label on the puts. % I assert all such puts should have the same label. 
+In addtion, apply the first two rules to any nodes encountered along those paths.
+%\item  For each \emph{get}  marked   ${n}$ leading to a \emph{put}  node related to a call in the cycle, add   ${n}$ to  $comps$.
 \end{itemize}
 The cycle is \emph{flooding wrt a call} $n$ if 
 $n\in (calls -comps)$.

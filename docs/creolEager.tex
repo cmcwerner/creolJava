@@ -271,22 +271,8 @@ growing to system limits.
 
 \section{Identifying Flooding Cycles}
 
-%\section{Definition of Flooding Cycles}
 \begin{definition}
 \label{flooding-cycle}
-A \emph{flooding-cycle} is an execution cycle 
-involving one or more asynchronous calls
-such that for at least one of those calls, call it $o.m()$,
-an unbounded number of the calls to  $o.m()$ may be produced by the cycle
-before any invocation of  $o.m()$ has been completed.
-\end{definition}%
-
-\footnote{So iteration of the cycle \emph{ call o.m(); call o.m(); get (for one of these calls only);} will produce an unbounded number of uncompleted o.m-calls, but is NOT considered a flooding cycle since some of the call will complete.
-However, we do not want to count too much, so this might  be the best we can deal with, unless we talk about calls of a given  program location 
- giving rise to 
-unboundedness. A definition we could statically analyse, could possibly be: 
-\begin{definition}
-\label{flooding-cycle2}
 A \emph{flooding-cycle} is an execution cycle 
 containing a call statement
 %involving one or more asynchronous calls
@@ -296,38 +282,12 @@ this statement may produce an unbounded number of  method calls
 before any of them %invocation of  $o.m()$
  has been completed.
 \end{definition}%
-This would mean that we need to keep track of call locations,
-in the analysis. (Or alternatively we could consider calls of a given  \emph{future variable}.)
-}
 
-\ignore{
-Thus it suffices that 
-each iteration of the cycle will produce 
-one call to an object $o$ and that there is nothing in the cycle that
-ensures that the  result of this call is read or is produced.
-
-If the flooded object is outside the group this means that there must
-be a \emph{get} operation in the cycle, which directly or indirectly ensures
-that a future from the generated calls is read.  If the flooded object
-is inside the group %this means that
- there must be a \emph{get} operation or a
-guard in the cycle that ensures that the operation is completed.
-
-We will below focus on the case that the flooded object is outside the
-group. This situation is particularly harmful in distributed systems
-since the flooding of an object is caused by the environment.  Thus it
-cannot easily be detected by unit testing. (In contrast, when the
-flooded object is inside the group unit testing of the group may
-reveal the problem.)  
-}
 Flooding of this kind may depend on the relative
 speed of different objects, and  may be difficult to detect even
 by testing of complete systems, due to their inherent
 non-deterministic nature.  They may show up for instance at times when
 the system load is high.
-
-%Therefore static detection of possible flooding is worthwhile.
-
 
 Flooding cycles that depend on unfair scheduling
 may be avoided with fair scheduling of concurrent activity and
@@ -353,100 +313,51 @@ even with fair scheduling between concurrent units and
 The top-level view of an algorithm to detect flooding-cycles is shown in figure \ref{flow-analysis}.
 We first create a control flow graph for each method where the nodes are method start nodes, method calls, \emph{get} statements, 
 \emph{await} statements,
-or \emph{put} statements (including implicit \emph{put} statements at the end of Void methods).
+or \emph{put} statements (including implicit \emph{put} statements at the end of Void methods)\footnote{
+Synchronous method calls will be represented as an asyncrhonous method call followed immediately by a \emph{get}.}.
 All other statements are ignored. 
 In addition, the nodes are of two types,
 synchronous, or asynchronous. Synchronous nodes are \emph{get} statements or \emph{await} statements.
-(Need to look at an example with synchronous method calls.
-\footnote{
-A synchronous call should not pose problems in itself, but its body may make 
-problematic asynchronous calls. And \emph{get}s in its body should count in the same manner as \emph{get}s in the calling method. So I guess an explicit \emph{get} would work, as Charlie indicated by email.}
-The Oi from a synchronous method call needs to include any asynch calls
-resulting from the execution of the method.)
 
 \begin{figure}
 \begin{shaded}
 \begin{enumerate}
-\item Build the individual control flow graphs for each method including a start node, and a node for each call, \emph{get}, \emph{await}, and \emph{put} statements.
-\item Add call edges from call nodes to the start node of the corresponding method.
-\item Identify any cycles in the graph.
+\item Build the individual control flow graphs for each method including a start node, and a node for each call, \emph{get}, \emph{await}, 
+and \emph{put} statements.
+\item Add call edges from call nodes to the start node of a copy of the corresponding method cfg, unless the call is recursive, in which case
+create a call edge to the approriate start node. Assign each call node a unique label (e.g. the line number from the program). 
+%Assign the put(s) in the copy the same label as the label for the call node.
 \item Use flow analysis to compute the \emph{put} edges from \emph{put}s to \emph{get}/\emph{await}. (What is going to happen with more complex examples
 where there are multiple \emph{put}s that might reach a given \emph{get}?)
-\item Use flow analysis to identify any flooding cycles.
+\item Remove any flow egdes leading into get nodes.
+\item Identify any cycles in the graph.
+\item Compute the calls and comps sets for each cycle to identify flooding-cycles using algorithm xx.
 \end{enumerate}\end{shaded}%
 \caption{\label{flow-analysis}
-Flow Analysis for Detecting Flooding-Cycles}
+Top Level Algorithm for Detecting Flooding-Cycles}
 \end{figure}
 
-In step 2 we connect the cfgs for each method with call edges. Note that we do not distinguish between objects, only classes.
+In step 2 we connect the cfgs for each method with call edges expanding all non-recursive calls so that we can
+associate a specific call with a specific get/put. Note that we do not distinguish between objects, only classes.
 
-In step 3 we identify any cycles in the graph.
-
-In step 4 we add edges from \emph{put} statements to \emph{get} or \emph{await} statements that might block on the value for that future.\footnote{If we have the ambition of ensuring that 
+In step 3 we add edges from \emph{put} statements to \emph{get} or \emph{await} statements that block on the value for that future.
+\footnote{If we have the ambition of ensuring that 
 there is no flooding when the algorithm finds none,
 we must ensure that a ``get'' actually waits for the future
 (``must instead of ``might'').}
 
+In step 4 we remove flow edges into get nodes. For execution to continue past a get, it must have also passed through the
+method completing the future, thus removing the edge does not eliminate any key cycles. (See thm xxx.)
+
+In step 5 we identify any cycles in the graph.
+
+In step 6 we apply the algorithm in figure xx to identify any flooding cycles.
 If there is a cycle that creates futures (including implicit Void futures for trivial calls) that are not read
-in the cycle, then there is a flooding-cycle with respect to the call that produced the unread future.
+in the cycle, then there is a flooding-cycle with respect to the call that produced the unread future. 
+(I guess this is where we introduce a theorem.)
 
-After step 4 we will have a graph with start nodes, call nodes, \emph{get}/\emph{await} nodes, and
-put/return nodes. We will have flow edges (within a method), call edges (between methods), and \emph{put} edges from \emph{put}/return
-to \emph{get}/\emph{await}.
-
-Step 5 analysis then proceeds by picking a method start node that is part of a cycle.
-For each (in some order? Breadth First? Does it matter?\footnote{It should not matter since the we repeat until no further changes!}) flow node $N_i$ with input edge sets $P_{i,j}$, the output set $O_i$ is
-computed as shown in figure \ref{step5}. The sets $O_i$ are a modified multi-set. These are like regular sets except that an entry may be modified with
-a $*$ as in $C.m^*$ indicating that $C.m$ appears in the set ``more than once.'' For these modified multi-sets, 
-\begin{eqnarray*}
-\{X\} + X & = & \{X^*\},\\
-\{X^*\} - X & = & \{X\},\\
-\{X^*\} \bigcup \{X\} & = & \{X^*\}, and \\
-\{X^*\} \bigcap \{X\} & = & \{X\}
-\end{eqnarray*} 
-In figure \ref{step5},  $Cancel(S)$ is $S$ with the following changes:\newline
-If $S$ contains both $C.m$ and $\overline{C.m}$ remove them both.\newline
-If $S$ contains both $C.m^*$ and $\overline{C.m}$ then remove them both and add $C.m$.
-
-% I think I need to have more proper multisets and do Cancel on each Pi before combining them for Oi.
-% The union over Pi's however does a sort of max for multiples. So {X_2} U {X} is just {X_2} not {X_3}.
-
-\begin{figure}
-\begin{shaded}
-if the node is an async call to $C.m$, $O_i \leftarrow Cancel(\bigcup_j P_{i,j} + C.m$)\newline
-else if the node is a \emph{get}, $O_i \leftarrow \bigcup_i P_{i,j}$\newline
-else if the node is a \emph{put}, \newline
-\hspace*{.5cm}  $O_i \leftarrow \{ \overline{C.m} \}$ where C.m is the start node of method containing the \emph{put}\newline
-AND $O_k \leftarrow O_k + \overline{C.m}$ for each $O_k$ that is the output set of an immediate predecessor to the current \emph{put} node\newline
-otherwise $O_i \leftarrow Cancel(\bigcup_j P_{i,j})$\newline
-Repeat until there are no further changes in any $O_i$.%\newline
-\end{shaded}%
-\caption{\label{step5}%
-Flow analysis (step 5) for finding flooding cycles from the graph,
-computing the output egde set $O_i$ for a node $i$ from its input edge sets 
-$P_{i,j}$.
-}
-\end{figure}
-\footnote{The AND-part could be replaced by:
-%\begin{quote}
-%\begin{shaded}
-For every node with $\{ \overline{C.m} \}$ in its output,
-$\{ \overline{C.m} \}$ should propagate to all its outputs and also to its input sets, 
-%(in not already there)
-provided the node represents a  non-blocking and non-suspending statement.
-%\end{shaded}\end{quote}
-This may be needed for instance if there are 
-trivial statements (say an asynchronous call)
-between the cycle and the \emph{get}.
-We may then need to cancel less often,
-and we detect a potential flooding-cycle if a call
-%$O.m()$ 
-is a member of every  $Cancel(O_j)$ in the cycle.
-}
-
-A flooding of a call $o.m$ 
 %=======================================================
-\subsection{New Alternative Flow Analysis (step 5)}
+\subsection{Computing the call and comp sets (step 6)}
 
 \textbf{Assumptions:}
 
@@ -457,19 +368,18 @@ say numbered by their textual occurrence in the (sub)program.
 \item
  We consider one cycle (at a time),
 ignoring any external call initiating the cycle.
-\item
-If the same method is called several times from within the cycle,
-we include a copy of its body for each call.
-Thus each copy of a  method body has  at most  one caller from within the cycle.
+%\item
+%If the same method is called several times from within the cycle,
+%we include a copy of its body for each call.
+%Thus each copy of a  method body has  at most  one caller from within the cycle.
 \item
 We assume a finite graph (even after expansion).
 \item 
-A  \emph{put} node of a copy of a method body, is marked with the 
-caller $n$, marking that the call is completed.
+A  \emph{put} node of a copy of a method body, is marked with the same label $n$ as the label of the
+caller, marking that the call is completed. (Note: This may change with each cycle due to possible recursion.)
 \item
 We assume each \emph{get}  node,
-and each \emph{put} node, possibly
-possibly outside the cycle, 
+and each \emph{put} node, possibly outside the cycle, 
 can be traced back to a unique call $n$ creating the call,
 and we mark each  \emph{get} node and each  \emph{put} node  with the corresponding call  $n$, marking that the call is 
 completed.
@@ -496,6 +406,9 @@ The analysis will collect sets of calls $n$ from the cycle and call completions,
 in  the cycle, or even outside  the cycle when  reachable from the cycle without suspensions or blocking,
 or  when a predecessor of  a \emph{get} is related to a call in the cycle.
 The analysis, uses two sets, denoted $calls$ and $comps$.
+
+\begin{figure}
+\begin{shaded}
 \begin{itemize}
 \item For each call $n$ in the cycle add $n$ to $calls$.
 \item For each \emph{get} node  marked   $n$ in the cycle add   $n$ to  $comps$.
@@ -503,225 +416,92 @@ The analysis, uses two sets, denoted $calls$ and $comps$.
 %\item  For each \emph{put} node marked   ${n}$ reachable along flow edges from the cycle, 
 %without going through \emph{await} or  \emph{get} nodes,
 % add   ${n}$ to  $comps$.
-\item For each node with flow edges leaving the cycle where the cycle edge is an async call edge, 
+\item For each node, $N_i$, with flow edges leaving the cycle where the cycle edge is an async call edge,%
+\footnote{could we say:  
+        For each call edge in the cycle,  leaving a node, $N_i$ with flow edges leaving the cycle }
 % ie not the off cycle edge in Ex2 from O.m to A.a
-if all paths involving only flow edges starting from that node lead to a put
-before encountering \emph{await} or \emph{get} nodes, then add ${n}$ to $comps$,
+if all flow-edge-only paths starting from $N_i$ lead to a put %Will it work to include call edges AFTER the first edge? See ex 9.
+%before encountering \emph{await} or \emph{get} nodes, % no need for this now because there are NO flow edges into get nodes
+then add ${n}$ to $comps$,
 %see Ex7 for multiple paths one that reaches the put and one that does not resulting in a flood of calls to B.
 where ${n}$ is the label on the puts. % I assert all such puts should have the same label. 
-In addtion, apply the first two rules to any nodes encountered along those paths.
+In addtion, if there is a call node $c$ on any flow-edge, off-cycle path from $N_i$ to the first put, unlabeled-get, or await on the path,
+% can there be an unlabeld-get??? or just gets with labels that are not in calls. That would seem to suggest an unexecutable path.
+then add $c$ to calls, and
+%There is a problem here. get/await seem to end the paths so do we ever go past a get in such cases?
+%I think the answer is yes. I'm thinking we need to treat a get that is matched to a specific put in the graph differently and ALWAYS
+%remove the flow edge INTO the get, requiring the cycle to go around through the put node. In these cases the get would always be essentially a noop.
+%Then gets that can't be matched to a specific put are treated as blocking and the end of a path as far as the analysis goes.
+%If sticking with the labeling idea, a get with a label passes immediately and a get with no label ends the path.
+%I suppose a get with no label on a cycle would be treated as always passing, but adding nothing to comps.
+if there is a get with label $g$ on every such path, then add $g$ to comps.
 %\item  For each \emph{get}  marked   ${n}$ leading to a \emph{put}  node related to a call in the cycle, add   ${n}$ to  $comps$.
+\item For each put node, $P_i$, in the cycle with more than one output edge, need to follow all paths off of the cycle following
+all types of edges to the ends of the paths (note the flow edges INTO get nodes will have been removed) adding ${n}$ to $calls$ for
+each call node encountered and ${n}$ to $comps$ for each put node encountered. (Note this flow will never encounter a get except
+from a put which will have already added the appropriate value to $comps$.)
 \end{itemize}
-The cycle is \emph{flooding wrt a call} $n$ if 
-$n\in (calls -comps)$.
-\ignore{
-\subsection{Previous Version of Alternative Flow Analysis (step 5)}
-
-
-\textbf{Assumptions:}
-
-\begin{itemize}
-\item
-A start node of method $m$  has no label,
-but the \emph{put}s of the method 
-is labeled by the special label $m$
-(in case of several methods $m$ in the program, we may use the class name
-to distinguish the different $m$s as in $m_C$).
-\item
-The edges are marked by sets of labels.
-\item
-We assume each \emph{get} can be traced back to a unique call $n$
-and \emph{put} node generating the future value,
-We then make an edge labeled $\{n\}$ from the \emph{put} node to the \emph{get} node.
-(We may perhaps need several copies of a method
-if that helps?)%
-\footnote{
-If a \emph{put} note may lead to several \emph{get} nodes, depending on how they are
-called, we may take several copies of the method so that each \emph{put}
-unique binds to a  call.}
-\item
-Blocking calls are split into an async call $n$ and a (matching) \emph{get}
-associated with $n$.
-There is an edge labeled  $\{n\}$ from the \emph{put} of the called method to the \emph{get},
-other edges from the \emph{put} node should not be affected by this call $n$.
-\item
-We treat blocking self-calls specially,
-by not including an edge from the call node to the get node.
-\ignore{%I guess blocking self-calls are treated specially, 
-say in-lining (a
-copy) of the called method in the cycle (with an arrows to its
-start node, and an arrow back to the next statement).
-
-(For blocking self calls, I guess the next node is the
- start node of (a copy) the 
-called method where \emph{put} connects back to the next statement(?)
-This  means that several copies of the same body may appear in the 
-analysis if they end up differently.}
-\item
-Boolean \emph{await} statements are represented as nodes in the graph
-(since they may affect progress and thereby \emph{put}-propagation).
-\end{itemize}
-\textbf{Analysis:}
-
-
-
-%Call statements are labeled by unique positive numbers and
-%put statements are labeled 0.
-%Start nodes have no label and are not recorded in the analysis.
-Each edge between nodes in a cycle is assigned  a set of labels,
-initially empty.
-Each node has one or more outgoing edges, each labeled with the same edge set, 
-called its \emph{output set},
-except for \emph{put} nodes where the different outgoing edges should have
-only one label in the set.
-%set for each outgoing nodes,
-%but 
-A node may have several edges coming in, each with different label sets,
-called its  \emph{input sets}.
-The flow analysis
-considers \emph{each cycle} and 
- is done in two phases,
-(assuming edges from \emph{put} nodes has been made and labeled as mentioned):
-\begin{enumerate}
-\item
-a backwards analysis inside each method body, handling 
-backward propagation of \emph{put} labels,
- and 
-\item
-a forward analysis through the graph, 
-handling forward propagation of call labels.
-\end{enumerate}
-Details are given in figure \ref{step5a}.
-Note that since we consider one cycle at a time,
-each node has at most one undotted input edge and one 
-undotted output edge.
-
-
-
-
-\emph{NOTE:} There are no stars, % and complement/overline,
-so detection of flooding calls for a cycle should be easy.
-Flooding is detected when a call label is present
-on all edges in the cycle after applying the \emph{Cancel} function:
-\begin{quote}
-  $Cancel(S)$ is $S$ with the following changes:\newline
-If $S$ contains both $C.m$ and $\overline{C.m}$ remove them both.
-\end{quote}
-
-\begin{figure}
-\begin{shaded}
-
-\textbf{Backward propagation (methodwise):}
-Start with a \emph{put} node inside  a method $m$. 
-%The termination statement(s) (i.e., a \emph{put}) of the  body  a method $m$ 
-Its  label $m$  is propagated backwards 
-inside the method body, until it reaches 
-a node representing an
-\emph{await} statement or a \emph{get}.
-Thus, for each such node, if  $m$ is in %one of
- its output set it is 
-propagated to  its  input edge. %all input edges of the node.
-
-
-
-\textbf{Forward propagation (cyclewise):}
-Inherit the result of the backward phase, consider a given cycle 
-and 
-start with a start node. 
-
-When entering the body of a method  $m$, store the set of 
-predecessor nodes \emph{of this cycle} (they will all be call nodes,
-typically only one)
-in a  set $caller_m$.
-
-When passing a call node $i$, %representing a call inside a method body $m$, 
-add its label $n$ to the output edge set:
-$$\begin{array}{lll}
-O_i&\leftarrow& O_i \bigcup_j cancel_m(P_{i,j}) + n%\\
-\end{array}$$
-where $m$ is the enclosing method and $cancel_m$ is given by
-$$\begin{array}{lll}
-cancel_m(S)&= S - caller_m,& \textbf{if}\ m\in S\\
-cancel_m(S)&= S , &\textbf{if}\ m\not\in S%\\
-\end{array}$$
-% 
-\ignore{If the node is a \emph{put} (ending method $m$)
-$$\begin{array}{lll}
-O_i&\leftarrow& O_i \bigcup_j P_{i,j} - \{m\} %\\
-\end{array}$$}
-%
-If the node is a \emph{get} associated with a call $n$
-$$\begin{array}{lll}
-O_i&\leftarrow& O_i \bigcup_j  cancel_m(P_{i,j}) + \{{n}\}%
-\end{array}$$
-This assumes that it is detected that the \emph{get} is getting the future
-defined by the call $n$.
-%\footnote
-{NOTE: No problem with termination  now,
-since the call-get  connection is given and thus $n$ will never be 
-in the output  of the node. (Right?)}
-In all other cases (including \emph{put})
-$$\begin{array}{lll}
-O_i&\leftarrow& O_i \bigcup_j cancel_m(P_{i,j}) %\\
-\end{array}$$
-Repeat until there are no further changes in any $O_i$.%\newline
-\end{shaded}%
-\caption{\label{step5a}%
-Alternative flow analysis (step 5), based on call statement labels, for finding flooding cycles from the graph,
-computing the output edge set $O_i$ for a node $i$ from its input edge sets 
-$P_{i,j}$.
-}
+\end{shaded}
+\caption{\label{call-cons-analysis}
+Algorithm to compute the call and comp sets for a cycle.}
 \end{figure}
 
-}
-\subsection{Old Text}
+\begin{theorem}
+The cycle is \emph{flooding wrt a call} $n$ if 
+$n\in (calls -comps)$.
+\end{theorem}
 
-\begin{definition}
-\label{potential-flooding-cycle}
-There is a \em{potential flooding-cycle} between cycle $C_i$ and call $O.m()$ if 
-$O.m()$ or $O.m*()$ is a member of every set $O_j$ in the cycle, and
-the start node for $O.m()$ is not in $C_i$.
-\end{definition}
-
+\subsection{Applying the Algorithm to the example program}
 
 
 \begin{figure}[t]
 \includegraphics[width=15cm]{graphOrig}
 \caption{\label{graph-orig}
-The graph and output sets after the completion of step 5 for the original version of the program (figure \ref{example-subscr}).
+The graph and call/comp sets for the original version of the program (figure \ref{example-subscr}).
 }
 \end{figure}
 
 \begin{figure}[t]
 \includegraphics[width=15cm]{graphModified}
 \caption{\label{graph-modified}
-The graph and output sets after the completion of step 5 for the modified version of the program (figure \ref{example-subscr-flooding}).
+The graph and call/comp sets for the modified version of the program (figure \ref{example-subscr-flooding}).
 }
 \end{figure}
 
 
-Figures \ref{graph-orig} and \ref{graph-modified} show the state of the graph and the output sets
-after the completion of step 5 for the two versions of the producer consumer problem above. To conserve space, all method names are abbreviated to the
+Figures \ref{graph-orig} and \ref{graph-modified} show the call and comp sets
+for the two versions of the producer consumer problem above. To conserve space, all method names are abbreviated to the
 first letter of the class and the first letter of the method except that we use X for the class Proxy it further disambiguate it from Producer. 
 For example, Producer.detectNews is Pd and Proxy.publish is written Xp.
 
-In figure \ref{graph-orig} we see that Cs (Client.signal) appears in every set of cycle A. This indicates that cycle A is a potential flooding-cycle
-with respect to Client.signal. In practice this cycle does not cause a flood because in this implementation, the amount of work required by the
-Client to complete a signal call is trivial and thus the Client objects easily keep up with the calls. Also, the rate of execution for cycle A is
+In figure \ref{graph-orig} we see that Cs (Client.signal) is being flooded by each of the three cycles. 
+In practice these do not produce floods because in this implementation, the amount of work required by the
+Client to complete a signal call is trivial and thus the Client objects easily keep up with the calls. Also, the rate of execution for 
+each of the cycles is
 limited by the actual arrival of news items from the NewsProducer, which further limits the rate at which this cycle generates asynchronous calls to
-CLient.signal.
-
-In figure \ref{graph-orig} we also see that Xp (or Xp*) appears in every set of cycle B. However, because
-the start node for Xp is in cycle B, this is not a flooding cycle. We can see that it is in fact not a flooding cycle 
-because although each time around the cycle generates a call to Xp, each time around the cycle also results in the completion of
-one call for a net gain of zero. Even if Proxy objects are distinct (as they in fact are in this example), this would only cause 
-a flood if each of the Xp calls was somehow delayed for a non-trivial amount of time after issuing the asynchronous call as the 
-last step in the method Xp.
+CLient.signal. (Is this an example of weak flooding?)
 
 In the modified version of the program as reflected in figure \ref{graph-modified} there is an additional flood between cycle A and
 Pd (Producer.detectNews). This flooding-cycle is serious, and in practice will flood the system almost immediately.
 Unlike in version 1, there is no \emph{get} regulating the speed at which cycle A cycles. Furthermore, the Pd calls are dependent upon the
 arrival of news items not simply limited by processor execution speed.
+
+\subsection{Weak and strong flooding}
+When a cycle floods with respect to a call $o.m$,
+we say that we have \emph{strong flooding} 
+when the method contains an  await or get node
+(not resolved in the context of the cycle),
+otherwise \emph{weak flooding}.
+Strong flooding indicates a serious flooding case,
+while weak flooding typically indicates flooding 
+that is harmless, given underlying fairness of concurrent objects
+and  fair scheduling of tasks within an object. 
+%Weak flooding of several calls to the same object could cause serious flooding.
+
+The first version of the subscription example
+has weak flooding of client calls (\emph{signal}),
+whereas the second has strong flooding both wrt
+to client calls and  to \emph{detectNews} calls.
 
 
 \bibliographystyle{abbrv}

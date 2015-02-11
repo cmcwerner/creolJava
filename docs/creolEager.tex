@@ -330,8 +330,6 @@ create a call edge to the existing start node. Assign each call node a unique la
 \item Identify any cycles in the graph.
 \item Use flow analysis to compute the \emph{put} edges from \emph{put}s to \emph{get}/\emph{await}. (What is going to happen with more complex examples
 where there are multiple \emph{put}s that might reach a given \emph{get}?)
-\item Mark any flow edges leading into get nodes as \emph{disabled}\footnote{This will affect off-cycle reachability analysis. 
-It does not affect cycle edges.}
 \item Compute the calls and comps sets for each cycle to identify flooding-cycles using algorithm xx.
 \end{enumerate}\end{shaded}%
 \caption{\label{flow-analysis}
@@ -351,9 +349,7 @@ there is no flooding when the algorithm finds none,
 we must ensure that a ``get'' actually waits for the future
 (``must instead of ``might'').}
 
-In step 5 we disable flow edges into get nodes.
-
-In step 6 we apply the algorithms in figures \ref{reachable-analysis} and  \ref{call-comps-analysis} to identify any flooding cycles.
+In step 5 we apply the algorithms in figures \ref{reachable-analysis} and  \ref{call-comps-analysis} to identify any flooding cycles.
 If there is a cycle that creates futures (including implicit Void futures for trivial calls) that are not read
 in the cycle\footnote{Not really in the cycle, but in the reachable nodes starting from the cycle}, 
 then there is a flooding-cycle with respect to the call that produced the unread future. 
@@ -415,11 +411,11 @@ An algorithm to compute the calls (definition \ref{defn-calls}) and comps (defin
 for a graph of \emph{reachable} nodes is shown in figure \ref{call-comps-analysis}.
 
 \begin{definition}
-Node $N_j$ is \emph{flow-reachable} from $N_i$ if there is an \emph{enabled} flow-edge $N_i \rightarrow N_j$. 
+Node $N_j$ is \emph{flow-reachable} from $N_i$ if there is a flow-edge $N_i \rightarrow N_j$. 
 \end{definition}
 
 \begin{definition}
-A \emph{flow-path} is a path made up of only flow-edges, including, \emph{disabled} flow-edges.
+A \emph{flow-path} is a path made up of only flow-edges.
 \end{definition}
 
 \begin{definition}
@@ -427,10 +423,10 @@ A \emph{flow-path} is a path made up of only flow-edges, including, \emph{disabl
 Node $N_i$ is \emph{reachable} wrt cycle $C$ in graph $G$ if
 \begin{itemize}
 \item $N_i \in C$, or
-\item $N_i$ is flow-reachable from $N_j$, $N_j$ is \emph{reachable}, and $\not\exists e = N_j \rightarrow N_k$ where $e$ is a flow-edge $\in C$, or
+\item $N_i$ is not a \emph{get} node, $N_i$ is flow-reachable from $N_j$, $N_j$ is \emph{reachable}, and $\not\exists e = N_j \rightarrow N_k$ where $e$ is a flow-edge $\in C$, or
+\item $N_i$ is a \emph{get} node, all predecessors of $N_i$ are \emph{reachable}, $\forall N_j$, a predecessor of $N_i$
+$\not\exists e = N_j \rightarrow N_k$ where $e$ is a flow-edge $\in C$, or
 \item $n \in {comps}$, $N_i$ is a start node with label $n$, $\exists$ a call edge $N_j \rightarrow N_i$, and $N_j$ is \emph{reachable} or
-\item $N_p \rightarrow N_i$ is a put-get edge, $N_p$ is \emph{reachable}, $N_x \rightarrow N_i$ is a \emph{disabled} flow-edge, and
-$N_x$ is \emph{reachable}.
 
 %possible additions
 \item $N_i$ is a \emph{put} node, $N_j$ is a \emph{reachable} \emph{get} node and $N_i \rightarrow N_j$ is in $G$. %first metion of G?
@@ -467,7 +463,7 @@ $n\in (calls -comps)$.
 \end{theorem}
 
 
-\begin{figure}
+\begin{figure}[h]
 %Example
 \begin{abs}
 Void cycle()      {1:m(); get$_1$; 2:cycle(); put}
@@ -483,7 +479,7 @@ future of the current call. The cycle should flood 3 calls.}
 
 
 
-\begin{figure}
+\begin{figure}[h]
 %Example
 \begin{abs}
 Void cycle()      {f:=1:m(); 2:n(f); get$_1$; Put}
@@ -502,6 +498,20 @@ CALLS: 1,2,3.
 COMPS: 1,2 and also 3 if we put back the (off-cycle)  flow edge into 
  $get_1$.
 Without putting it back we do not reach \emph{put} of \emph{cycle}.
+}
+\end{figure}
+
+
+\begin{figure}[h]
+%Example
+\begin{abs}
+Void cycle(f)      {1:m(f); get$_1$; 2:cycle(f); Put}
+Void m(Future f)  {if (bExpr) {get$_f$; 3: n();}  put}
+\end{abs}
+\caption{\label{example-quasi3}
+  Quasi example 3.
+%
+$n$ could be flooded if bExpr is true, but currently we don't mark the call to $n$ as reachable.
 }
 \end{figure}
 

@@ -1,6 +1,6 @@
-import creole.*;
+import creol.*;
 
-class BBMain extends CreoleObject{
+class BBMain extends CreolObject{
   public static void main(String[] args) {
     new BBMain().test();
   }

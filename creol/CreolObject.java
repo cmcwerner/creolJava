@@ -1,34 +1,34 @@
-package creole;
+package creol;
 import java.util.ArrayList;
 import java.lang.reflect.Method;
 
-public class CreoleObject extends Thread {
+public class CreolObject extends Thread {
       public static int activeCalls;
   static private int nextId = 0;
   final int id = ++nextId;
-  private ArrayList<CreoleCall> calls = new ArrayList<CreoleCall>();
-  private ArrayList<CreoleCall> suspended = new ArrayList<CreoleCall>(); // tasks that volunarily suspended
-  private ArrayList<CreoleCall> futureWait = new ArrayList<CreoleCall>(); // tasks that did await(future) and the future still no ready
-  private ArrayList<CreoleCall> condWait = new ArrayList<CreoleCall>(); // tasks that did creoleAwait() - awaken only if something happens 
-  private CreoleCall current = null;
+  private ArrayList<CreolCall> calls = new ArrayList<CreolCall>();
+  private ArrayList<CreolCall> suspended = new ArrayList<CreolCall>(); // tasks that volunarily suspended
+  private ArrayList<CreolCall> futureWait = new ArrayList<CreolCall>(); // tasks that did await(future) and the future still no ready
+  private ArrayList<CreolCall> condWait = new ArrayList<CreolCall>(); // tasks that did creolAwait() - awaken only if something happens 
+  private CreolCall current = null;
   
-  protected CreoleObject() {
+  protected CreolObject() {
     this.start();
   }
   
   public synchronized Future invoke(String method, Object... args) {
     Future fut = new Future();
-    CreoleCall newCall = new CreoleCall(method, fut, args);
+    CreolCall newCall = new CreolCall(method, fut, args);
     calls.add(newCall);
     debug("new call added " + this.getClass() + " " +method);
     notify();
     return fut;
   }  
   
-  public Object creoleAwait(Future fut) {
+  public Object creolAwait(Future fut) {
     // busy waits only if nothing else to do
 //    while(!fut.ready) {
-//      creoleSuspend();
+//      creolSuspend();
 //    }
 //    return fut.get();
 //    
@@ -36,7 +36,7 @@ public class CreoleObject extends Thread {
     // when the futures becomes ready it will tell each in the list to move from waiting to suspended
     if (!fut.ready) {
       assert current != null : id;
-      CreoleCall waiter = current;
+      CreolCall waiter = current;
       boolean ready; // might have become ready since the check just above - will need to check again for sleeping
       synchronized(fut) {
         ready = fut.addWaiter(current); // returns the current value of ready - if true then it was not put in the future queue       
@@ -82,8 +82,8 @@ public class CreoleObject extends Thread {
   /* moves the current call to the specified queue (currently either suspended or futureWait
    * and then has the thread(call) wait.
    */
-  private void moveToQueue(ArrayList<CreoleObject.CreoleCall> queue) {
-    CreoleCall suspendee;
+  private void moveToQueue(ArrayList<CreolObject.CreolCall> queue) {
+    CreolCall suspendee;
     // first put it in the appropriate queue and mark this object as not busy, waking up the dispatcher
     synchronized(this) {
       assert current!=null : id;
@@ -99,7 +99,7 @@ public class CreoleObject extends Thread {
     assert(suspendee == current || queue == futureWait);
   }
   
-  private void tryToSleep(CreoleCall suspendee) {
+  private void tryToSleep(CreolCall suspendee) {
     synchronized(suspendee) {
       if (!suspendee.wakingUp) {
         try {
@@ -117,12 +117,12 @@ public class CreoleObject extends Thread {
     }
   }
   
-  public void creoleSuspend() {
+  public void creolSuspend() {
     moveToQueue(suspended);
   }
   
-  // this is like creoleSuspend() except that it won't be reawakened until some object state has potentially changed
-  public void creoleAwait() {
+  // this is like creolSuspend() except that it won't be reawakened until some object state has potentially changed
+  public void creolAwait() {
     moveToQueue(condWait);
   }
   
@@ -141,7 +141,7 @@ public class CreoleObject extends Thread {
         if (current == null) {
           // see if any new calls to process
           if(calls.size() > 0) {
-            CreoleCall call;
+            CreolCall call;
             synchronized (this) {
               call = calls.remove(0);
               assert(call != null);
@@ -153,7 +153,7 @@ public class CreoleObject extends Thread {
           }
           // no calls, what about any suspended calls
           else if (suspended.size() > 0) {
-            CreoleCall call;
+            CreolCall call;
             synchronized (this) {
               call = suspended.remove(0);
               assert current==null:id;
@@ -189,31 +189,31 @@ public class CreoleObject extends Thread {
     }
   }
   
-  // inner class because every call must be associated with some CreoleObject
-  class CreoleCall extends Thread {
+  // inner class because every call must be associated with some CreolObject
+  class CreolCall extends Thread {
     String method;
     Future fut;
     Object[] args;
     boolean wakingUp = false;
-    CreoleCall(String method, Future fut, Object... args) {
+    CreolCall(String method, Future fut, Object... args) {
       this.method = method;
       this.fut = fut;
       this.args = args;
     }
     
     final public void run() {
-      synchronized(CreoleObject.this.getClass()){
+      synchronized(CreolObject.this.getClass()){
         activeCalls++;
       }
       debug("processing call " + method + ":"+current + ":" + this);
       invoke();
       // call is over - notify the dispatcher that it can schedule another
-      synchronized (CreoleObject.this) {
+      synchronized (CreolObject.this) {
         debug("free: call ended " + method + ":" + current + ":" + this);
         current = null; // no longer busy
-        CreoleObject.this.notify();
+        CreolObject.this.notify();
       }
-      synchronized(CreoleObject.this.getClass()){
+      synchronized(CreolObject.this.getClass()){
         activeCalls--;
       }
     }
@@ -225,7 +225,7 @@ public class CreoleObject extends Thread {
         for(int i = 0; i < args.length; i++) {
           types[i] = args[i].getClass();
         }
-        m = CreoleObject.this.getClass().getMethod(method,types);
+        m = CreolObject.this.getClass().getMethod(method,types);
       }
       catch (NoSuchMethodException e) {
         e.printStackTrace(System.out);
@@ -233,12 +233,12 @@ public class CreoleObject extends Thread {
       if (m != null) {
         try {
           if (fut != null) {
-            Object result = m.invoke(CreoleObject.this,args);
+            Object result = m.invoke(CreolObject.this,args);
             fut.set(result);
             debug("Setting future " + this + " " + method);
           }
           else {
-            m.invoke(CreoleObject.this,args);
+            m.invoke(CreolObject.this,args);
             debug("end of void method " + this + " " + method);
           }
         }

@@ -1,6 +1,6 @@
-import creole.*;
+import creol.*;
 
-public class Service extends CreoleObject {
+public class Service extends CreolObject {
   private Producer prod;
   private Proxy proxy;
   private Proxy lastProxy;

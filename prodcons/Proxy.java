@@ -1,7 +1,7 @@
-import creole.*;
+import creol.*;
 import java.util.*;
 
-public class Proxy extends CreoleObject {
+public class Proxy extends CreolObject {
   private int limit;
   private Service s;
   private ArrayList<Client> myClients = new ArrayList<Client>();
@@ -26,7 +26,7 @@ public class Proxy extends CreoleObject {
   }
   
   public void publish(Future fut) {
-    News ns = (News)creoleAwait(fut);
+    News ns = (News)creolAwait(fut);
     // send the news item to each of this proxies clients
     for (Client c : myClients) {
       c.invoke("signal",ns); 

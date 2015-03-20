@@ -1,7 +1,7 @@
 import java.util.ArrayList;
-import creole.*;
+import creol.*;
 
-class ProdCons extends CreoleObject {
+class ProdCons extends CreolObject {
   public static void main(String[] args) {
     new ProdCons().main();
   }
@@ -19,7 +19,7 @@ class ProdCons extends CreoleObject {
     
     int count = 0;
     while(count < 100) {
-      System.out.println("active calls " + CreoleObject.activeCalls);
+      System.out.println("active calls " + CreolObject.activeCalls);
       np.invoke("add",new News(++count));
       try {
         //Thread.currentThread().sleep((int)(Math.random()*100));

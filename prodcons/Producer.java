@@ -1,6 +1,6 @@
-import creole.*;
+import creol.*;
 
-public class Producer extends CreoleObject{
+public class Producer extends CreolObject{
   private NewsProducer np;
   Producer(NewsProducer np) {
     this.np = np;

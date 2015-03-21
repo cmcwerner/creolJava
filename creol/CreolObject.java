@@ -2,8 +2,12 @@ package creol;
 import java.util.ArrayList;
 import java.lang.reflect.Method;
 
+/**
+ * Every active object in a CreolJava program must extend this class.
+ * Doing so then makes it possible to send ascyhronous messages to this object with invoke().
+ */
 public class CreolObject extends Thread {
-      public static int activeCalls;
+  public static int activeCalls; // for debugging and analysis only
   static private int nextId = 0;
   final int id = ++nextId;
   private ArrayList<CreolCall> calls = new ArrayList<CreolCall>();
@@ -12,10 +16,23 @@ public class CreolObject extends Thread {
   private ArrayList<CreolCall> condWait = new ArrayList<CreolCall>(); // tasks that did creolAwait() - awaken only if something happens 
   private CreolCall current = null;
   
+  /**
+   * Once constructed, a CreolObject will become active running the scheduler thread implemented 
+   * in the run() method of CreolObject, which is final to prevent subclasses from inadvertently changing the scheduler.
+   * The scheduler will dispatch method calls when they arrive via a call to invoke().
+   */
   protected CreolObject() {
     this.start();
   }
   
+  /**
+   * Make an asynchronous method call.
+   * @param method - the name of the method in this object to be asynchronously invoked.
+   * @param args - a possibly empty list of arguments that will be passed to the method. Note that
+   * a limitiation of the current implementation is that the signature of any such methods must not
+   * contain primitive types, although primitives can be passed which implicitly uses Java's auto box/unbox.
+   * @return a reference to a Future that will contain the retuned value once it is produced.
+   */
   public synchronized Future invoke(String method, Object... args) {
     Future fut = new Future();
     CreolCall newCall = new CreolCall(method, fut, args);
@@ -25,13 +42,15 @@ public class CreolObject extends Thread {
     return fut;
   }  
   
+  /**
+   * Suspend the current method/process unless the future has already been produced.
+   * If suspended, the method will continue after the future has been produced and this active object
+   * is not executing some other method (i.e. it is in the idle state).
+   * @param fut - the future to wait for
+   * @return - the value from the future once it is produced. The caller is responsible for doing the
+   * necessary cast to the expected return type of the called method.
+   */
   public Object creolAwait(Future fut) {
-    // busy waits only if nothing else to do
-//    while(!fut.ready) {
-//      creolSuspend();
-//    }
-//    return fut.get();
-//    
     // put on a queue like with suspend and also put in the list for the future
     // when the futures becomes ready it will tell each in the list to move from waiting to suspended
     if (!fut.ready) {
@@ -79,6 +98,23 @@ public class CreolObject extends Thread {
     return fut.get();           
   }
   
+  /**
+   * Voluntarily suspend this current method/process. If there is nothing else for the object to do, this method
+   * may continue immediately, otherwise it will yield to some other waiting method call.
+   */
+  public void creolSuspend() {
+    moveToQueue(suspended);
+  }
+  
+  /**
+   * This is like creolSuspend() except that it won't be reawakened until some object state has potentially changed.
+   * This method is intended to be used in conjuction with a while() statement to test the await condition, as in
+   * while (!awaitCondition) o.creolAwait();
+   */
+  public void creolAwait() {
+    moveToQueue(condWait);
+  }
+  
   /* moves the current call to the specified queue (currently either suspended or futureWait
    * and then has the thread(call) wait.
    */
@@ -117,23 +153,16 @@ public class CreolObject extends Thread {
     }
   }
   
-  public void creolSuspend() {
-    moveToQueue(suspended);
-  }
-  
-  // this is like creolSuspend() except that it won't be reawakened until some object state has potentially changed
-  public void creolAwait() {
-    moveToQueue(condWait);
-  }
-  
   void wakeUpCondWaiters() {
     synchronized(this) {
       suspended.addAll(condWait);
       condWait.clear();      
     }
   }
-  
-  public void run() {
+  /**
+   * This is the object's scheduler. It is colled automatically when the object is created and cannot be overridden.
+   */
+  public final void run() {
     try {
       while (true) {
         // might get notified of a new call while still busy with something else

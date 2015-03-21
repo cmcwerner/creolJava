@@ -2,6 +2,11 @@ package creol;
 
 import java.util.ArrayList;
 
+/**
+ * Instances of Future are used to hold values that will eventually be produced by a method in an active CreolObject.
+ * It has just one public method, get(), used to extract the value from the future.
+ * If the value is not yet available the thread making the call will be suspended with a standard Java wait().
+ */
 public class Future {
   boolean ready = false;
   Object value;
@@ -28,6 +33,11 @@ public class Future {
       }
     }
   }
+  /**
+   * If the value of this Future has been produced, return it. Otherwise, wait.
+   * The thread will be awakened (notified) when the method associated with this future completes.
+   * @return - the value stored in this future.
+   */
   public synchronized Object get() { 
     try {
       if (!ready) {

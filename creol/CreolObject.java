@@ -7,7 +7,10 @@ import java.lang.reflect.Method;
  * Doing so then makes it possible to send ascyhronous messages to this object with invoke().
  */
 public class CreolObject extends Thread {
-  public static int activeCalls; // for debugging and analysis only
+  /**
+   * For debugging and analysis only.
+   */
+  public static int activeCalls;
   static private int nextId = 0;
   final int id = ++nextId;
   private ArrayList<CreolCall> calls = new ArrayList<CreolCall>();

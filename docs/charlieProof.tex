@@ -1,0 +1,155 @@
+\begin{lemma}
+\label{lemma-sr}
+If node $N_i$ is \emph{strongly-reachable} (SR) in graph $G$ with respect to cycle $C$ then $N_i$ is in every $T_{E,C,j}$ as defined in 
+definition \ref{def-tree}\,.
+\end{lemma}
+
+\begin{proof}
+We will use structural induction on the set of SR nodes to prove that Lemma \ref{lemma-sr} 
+holds for all SR nodes as defined by definition \ref{defn-sreachable}\,.
+\\ \emph%\subsubsection
+{Base case:}
+Let the set $S$ of SR nodes contain just nodes that are in $C$ (defn: \ref{defn-sreachable}.\ref{sr-incycle}).
+Clearly all nodes in $S$ will be in $T_{E,C,j}$ by definition of $T_{E,C,m}$ (definition \ref{def-tree}\,).\footnote{What is $m$ in  $T_{E,C,m}$}
+%
+\\ \emph%subsubsection
+{Induction step:}
+Assume Lemma \ref{lemma-sr}  holds for some set $S$ of SR nodes. We will show that applying each of the subparts of defn: \ref{defn-sreachable}
+defines a node to be SR for which the lemma holds.
+
+\ref{defn-sreachable}.2: $N_j$ is not a blocking node. $N_i$ is in every $T_{E,C,k}$ by the inductive assumption. 
+The only way to continue execution of the method containing $N_i$ is to execute $N_j$. Therefore 
+$N_j$ must also be in $T_{E,C,k}$ (definition \ref{def-tree}.c).
+
+\ref{defn-sreachable}.3: The argument is the same as for the previous case with the addition of the assumption that the \emph{put}
+indicating the completion of any possible future needed by this \emph{get}
+must also be SR (and in the tree). Since the only way to continue the execution of the method containing $N_i$
+is $N_j$ and $N_j$ is unblocked due to the completion of its future, $N_j$ must be in $T_{E,C,i}$ (definition \ref{def-tree}.c).
+
+\ref{defn-sreachable}.4: From the assumption of $n \in {\compsD}$, the method corresponding to
+${start}_n$ has finished and it cannot finish without starting, thus
+the node ${start}_n$ must have executed before the end of the tree. 
+Also by assumption, the corresponding node ${call}_n$ is SR and in $T_{E,C,m}$, thus the node ${start}_n$ must also
+be in $T_{E,C,m}$, satisfying the lemma.
+
+\ref{defn-sreachable}.5: The nodes ${start}_n$ and $N_k$ (a ${get}_n$ node) are SR and in $T_{E,C,m}$ (by assumption). But ${get}_n$ can only execute
+if ${put}_n$ has executed, thus the ${put}_n$ node $N_j$ must also be in $T_{E,C,m}$.
+
+\ref{defn-sreachable}.6: The only way to get to node $N_k$ is through $N_j$ and by assumption $N_k$ is SR and in every $T_{E,C,m}$.
+Thus the only way for $N_j$ to not be in $T_{E,C,m}$ would be for $N_k$ to be the first node in its method in $T_{E,C,m}$.
+But this is impossible.
+$N_k$ cannot be a \emph{start} node as \emph{start} nodes are not flow-reachable from any node. 
+If $N_k$ is the first node in its method to execute in $T_{E,C,m}$ (i.e. although we must go through $N_j$ to get to $N_k$ maybe
+$N_j$ is not in $T_{E,C,m}$), $N_k$ must be in the cycle which implies some other node $N_i$ reaches $N_k$ (to close the cycle) 
+which contradicts the assumption that $N_k$ is not flow-reachable from any node other than $N_j$.
+\end{proof}
+
+\begin{lemma}
+\label{lemma-call-chain}
+If node $call_n$ is \emph{flooding} with respect to cycle $C$ in graph $G$ then there must be a call chain from a \emph{call}
+in $C$ to $call_n$.\footnote{
+Moreover, the start node of the  method called by e $call_n$
+ is weakly reachable.}
+\end{lemma}
+
+\begin{proof}%Proof: 
+This %The first part of this 
+lemma follows directly from definition  \ref{flooding-cycle}\,.
+\footnote{The second part follows by simple inductin on the length of the call chain
+using  definition \ref{defn-wreachable}.\ref{wr-calledge}\,.}
+\end{proof}
+
+\begin{lemma}
+\label{lemma-no-flood-chain}
+If $\exists$ a call chain ${call}_0, {call}_1, ... {call}_n$ such that ${call}_0 \in C$ and all ${call}_i, i <= n$ are not flooding,
+then all ${start}_i, i <= n$ are SR.
+\end{lemma}
+
+\begin{proof}%Proof: 
+We will use structural induction on the length of the call chain.\\
+\emph{Base case:} If the length of the call chain is zero, then $call_0$ is SR by definition \ref{defn-sreachable}.\ref{sr-incycle}\,.
+Because $call_0$ is not flooding, $n$ must be in $\compsD$. Therefore
+${start}_0$ is SR by definition \ref{defn-sreachable}.\ref{sr-start}\,.
+\\
+\emph{
+Induction step:} If the length of the call chain, $n$, is greater than zero, then assume all ${start}_i, i < n$ are SR.
+However, the only way for ${start}_i$ to be SR is for ${call}_i$ to be SR (definition \ref{defn-sreachable}.\ref{sr-start}), therefore
+all ${call}_i, i < n$ are SR. Because ${start}_{n-1}$ is SR then by definition \ref{defn-wreachable}.\ref{wr-start} ${call}_n$ is weakly
+reachable and thus $n \in {\callsD}$, and from the assumption of the lemma, ${call}_n$ is not flooding,
+it must be the case that $n \in {\compsD}$. 
+Therefore, by definition \ref{defn-sreachable}.\ref{sr-start}, 
+${start}_n$ is SR.
+\end{proof}
+
+\begin{lemma}
+\label{lemma-wr}
+If node $call_n$ is \emph{flooding} with respect to cycle $C$ in graph $G$ then $n \in {\callsD}$\ignore{THE FOLLOWING PART CAN NOW BE REMOVED, RIGHT? or
+$\exists call_i$ that is flooding, there is a call chain from $call_i$ to $call_n$, and $i \in {\callsD}$}.
+\end{lemma}
+
+\begin{proof}%Proof: 
+We will use  induction on the length of the call chain from the call $call_0 \in C$ to $call_n$, where the
+call chain is $call_0, call_1, ... call_n$.
+\\
+\emph{Base case}: 
+If the length of the call chain is zero, then $call_0$ is the flooding
+call which by definition \ref{defn-sreachable}.\ref{sr-incycle} is SR
+and thus by definitions \ref{defn-wreachable} and \ref{defn-calls}, $0
+\in {\callsD}$.
+\\
+\emph{Induction step}: 
+If the length of the call chain is $n+1$ (with $n\geq 0$),
+then we may assume $n \in {\callsD}$.
+By definitions  {\ref{defn-wreachable}.\ref{wr-calledge}}
+and {\ref{defn-wreachable}.\ref{wr-start}}
+we have that ${n+1} \in {\callsD}$.
+\ignore{OLD TEXT WITH OLD DEF OF WR:
+  If the length of the call chain, $n$,
+  is greater than zero,  then assume 
+  $i \in {\callsD}$ for all $call_i$ in the chain $i < n$.
+  %It there is an $i<n$ such that $call_i$ is flooding the lemma holds.
+  %Otherwise, 
+  \Blue{We must then prove $n\in \callsD$.  There are two cases to
+   consider.  First, if there is an $i<n$ such that $call_i$ is
+   flooding then by the inductive hypothesis $i \in {\callsD}$ and there
+   is a call chain from $call_i$ to $call_n$, satisfying the lemma.}
+  In the other case, $call_n$ is the first call in the chain to be
+  flooding.  By assumption the method with $start_{n-1}$ contains the
+  call $call_n$.  $\forall i < n, {call_i}$, is not flooding thus
+  $call_i$ is SR. \Blue{(I forget why not flooding implies SR. I guess
+   we know it must be called and since it isn't flooding, it must
+   finish. If it finishes its put is SR and that gets back to it being
+   SR.  Do I need yet another lemma here?)}  and $\forall i < n,
+ {call_i}$ is $SR$.
+
+%(do I need to elaborate here? \Blue{YES, HOW ABOUT:
+%  None of the  calls $call_i$ are flooding for $i<n$ and thus
+%all start nodes  $start_i$  for $i<n$ are in SR}).
+
+  By definition \ref{defn-wreachable} every node in the method
+  containing $start_{n-1}$ is \emph{weakly-reachable} which includes
+  the node $call_n$. Thus $call_n$ is \emph{weakly-reachable} and by
+  definition \ref{defn-calls} is in ${\callsD}$.
+}
+\end{proof}
+
+\subsection{Proof of Theorem \ref{thm-flooding}}
+\begin{proof}
+If there is some \emph{flooding} call, $call_n$, where $n \not\in {\callsD}-{\compsD}$ then either
+\begin{description}
+\item[a)] $n \not\in {\callsD}$, or
+\item[b)] $n \in {\compsD}$.
+\end{description}
+By Lemma \ref{lemma-call-chain}, there must be a call chain starting on the 
+cycle that leads to $call_n$ and by Lemma \ref{lemma-wr} $n \in {\callsD}$. 
+%(Note: Need to correct of this being the first in a chain of flooded calls.)  
+Therefore if the theorem does not hold, it must be because $n \in {\compsD}$ 
+(and shouldn't be).
+
+If $n \in {\compsD}$ then from definition \ref{defn-comps} and lemma
+\ref{lemma-sr}, we know that either the method with label $n$ has
+finished ($put_n$ or $get_n$ are SR), or the method with label $n$ is
+partially executed directly in the cycle and none of the flow-paths
+leading from the last node of the method in the cycle will suspend
+before reaching a put.  Therefore $call_n$ cannot be flooding.
+\end{proof}

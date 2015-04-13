@@ -36,7 +36,7 @@ public class CreolObject extends Thread {
    * contain primitive types, although primitives can be passed which implicitly uses Java's auto box/unbox.
    * @return a reference to a Future that will contain the retuned value once it is produced.
    */
-  public synchronized Future invoke(String method, Object... args) {
+  public final synchronized Future invoke(String method, Object... args) {
     Future fut = new Future();
     CreolCall newCall = new CreolCall(method, fut, args);
     calls.add(newCall);
@@ -53,7 +53,7 @@ public class CreolObject extends Thread {
    * @return - the value from the future once it is produced. The caller is responsible for doing the
    * necessary cast to the expected return type of the called method.
    */
-  public Object creolAwait(Future fut) {
+  public final Object creolAwait(Future fut) {
     // put on a queue like with suspend and also put in the list for the future
     // when the futures becomes ready it will tell each in the list to move from waiting to suspended
     if (!fut.ready) {
@@ -105,7 +105,7 @@ public class CreolObject extends Thread {
    * Voluntarily suspend this current method/process. If there is nothing else for the object to do, this method
    * may continue immediately, otherwise it will yield to some other waiting method call.
    */
-  public void creolSuspend() {
+  public final void creolSuspend() {
     moveToQueue(suspended);
   }
   
@@ -114,7 +114,7 @@ public class CreolObject extends Thread {
    * This method is intended to be used in conjuction with a while() statement to test the await condition, as in
    * while (!awaitCondition) o.creolAwait();
    */
-  public void creolAwait() {
+  public final void creolAwait() {
     moveToQueue(condWait);
   }
   

@@ -1,0 +1,1045 @@
+
+
+%==============================================================
+
+\section{Main Theorem (no false negatives)}
+
+\ignore{Our definitions try to approximate infinite executions with 
+  sets based on maps to finite executions. 
+This makes the concept of unbounded more direct.}
+
+%\textbf{Executions.}
+In order to formally state properties of detection of flooding in
+executions, 
+%In order to state and prove properties of flooding,
+we need some understanding of \emph{executions} and execution order, 
+in particular
+how method calls and completions are handled.
+To capture independent processor speeds,
+we  give a partial order semantics.
+In order to define unboundedness in a natural manner,
+we  approximate infinite executions with 
+infinite  sets based on maps to finite executions. 
+Other aspects such as state values,  evaluation,
+and sequential execution steps are less central
+and are not specified in detail. 
+
+%At any point in an exection, the 
+
+In our concurrency model,
+each object is responsible for executing methods called on that object.
+Each method instance corresponds to a \emph{process} at run time, which may be suspended by \emph{await} statements.
+\OO{A started process continues until the end (given by a $put$),
+ %or to an internal loop 
+ to a suspension point, %(i.e., an await% with a false condition)
+or to a get where the future value is not available.}
+Suspended processes are kept in a queue together with incoming calls.
+In the semantics below, the queues are implicitly given by 
+looking at the (past)  execution history.
+%\footnote{Could also stop after a satisfied await?}
+An object can only execute one process at a time.
+When a process is suspended, the object may continue
+with another enabled process (if any).
+\ignore{NOT NEEDED? We here assume that (enabled) suspended processes 
+have priority over new incoming calls.}%
+Local synchronous calls are done as usual, in a stack-based manner.
+Local asynchronous calls are queued together with incoming calls.
+%
+Delays in execution are caused by delayed start of a method
+execution, say when the processing object is busy,  
+by  suspension, % (by await or suspending get), 
+and by blocking \emph{get}s.
+More formally we define system and object executions below.
+\ignore{
+   NEEDED?? For simplicity, we assume that resumption of suspending
+   \emph{get}s  (await on future) are not unnecessarily delayed when the
+   future is available; thus we do not distinguish blocking and
+   suspended \emph{get}s   wrt.\ delays, both are assumed to continue without
+   delay when the future value is present.}
+
+%\subsection{Short Version}
+
+\begin{definition}[System Execution and Object Execution]\label{def-ex}
+
+A \emph{system execution} $E$  is a mapping from time to 
+system execution at that time.
+A \emph{system execution at time $t$}, denoted $E[t]$, is given by two partial mappings:
+\begin{itemize} \item 
+  a partial mapping from object identities to
+  \emph{object executions} (one for each object in the system) at time $t$,
+  describing the object execution states %/steps  
+up to time $t$.
+  $E[t][oid]$ denotes the execution of object $oid$ at time $t$.
+%together with a set of (shared) futures, given by 
+\item
+  a partial mapping of future identities to values, reflecting all
+  generated future values up to time $t$.
+   $E[t][\mathit{fid}]$ denotes the %future 
+value of $\mathit{fid}$ at time $t$. 
+\end{itemize}
+%\begin{definition}[Object Execution]\label{def-ex}
+%
+The \emph{execution of a given object %of given class 
+at a given point in time} may be seen as a finite sequence of 
+execution states, where
+%, infinite if the execution does not terminate. 
+% Each state is indexed by the corresponding node (label)
+% in the program (graph), and
+each state includes relevant information such as 
+%future identities and 
+object state and local state, as well as the program counter value
+(and label in the program graph), and the unique future value of the
+invocation of the each % process 
+method execution.
+Generated object and future identities are globally unique.
+The execution %of a method 
+must follow the code of the method of the class of the object,
+letting the execution of a \emph{put} or an \emph{await}
+take the object to an \emph{idle} state.
+After an idle state the object may start a new method
+execution or continue an old %suspended
+ execution, after the last \emph{await},
+%a release point
+if the \emph{await} condition is enabled.
+%
+%Each object must progress with time. Thus for a system execution $E$ we have
+%Thus the continuation of an idle state is is general non-determinitic.
+%Each execution step must be legal, in goes ....
+\end{definition}
+Thus the only  non-deterministic steps appear after idle states
+and at branches that depend (directly or indirectly) on the value resulting from a  \emph{get}, which depends on the environment.
+%We may assume some general properties about executions%We may assume that execution continues with time
+%until no further execution step is possible by any object.
+We may  assume that  executions  obey the following  general properties.
+\begin{description}%===================================
+\item[Object Progress:]
+A method execution must continue (with time)
+as long as it has enabled steps.
+% If the execution of  an object has an enabled step at time $t$,
+%   the object must eventually continue to execute.
+\ignore{
+If the execution of an object at a given time ends in a non-idle state,
+the process will eventually continue or end in a \emph{get} that is 
+blocked at all later times.}
+
+\ignore{is not idle
+  If the execution of  an object has an enabled step at time $t$,
+   each object continues to execute if possible
+  %(\emph{object progress}):
+  An object execution must eventually continue as long as there are 
+  enabled steps (i.e., the object is idle and there are enabled processes,
+  or the object is not blocked in a \emph{get} in a method execution).%
+  \footnote{More formally: If an object $o$ stops at time $t$, i.e.,
+  $\forall t' \,.\ t'<t \Rightarrow E[t'][o]= E[t][o]$, it must be
+  blocked in a \emph{get}, and the future value is never generated, 
+  or it is in an idle state with no enabled process.}
+  Thus  each enabled step will be done by an object unless the object 
+  gets an unbounded number of processes, in which case
+  it will not be able to perform all of them.
+}
+\item[Historic Monotonicity:]
+Executions must be \emph{historically monotonic}
+in the sense that a system execution $E$
+seen at two different times,  $t1$
+and  $t2$ such that $t1<t2$,
+must agree on the past, i.e.,  $E$ must  satisfy
+% $$E[t1]\leq E[t2]$$ where $s\leq s'$ means that 
+$E[t1][\mathit{fid}] \not=\bot  \Rightarrow E[t1][\mathit{fid}] =E[t2][\mathit{fid}]$
+ for each future identity $\mathit{fid}$,
+and
+$E[t1][oid] \not=\bot  \Rightarrow E[t1][oid] \leq E[t2][oid]$ 
+for each object identity $oid$ where $\leq$ denotes 
+the sequence prefix ordering.
+Furthermore, %Moreover,
+ $E[t][oid]$ is defined if and only if
+the object $oid$ has been  created in the  execution  $E[t][oid']$ of
+some object $oid'$ by a  \textbf{new} statement. % Do we need to specify that the new happened ``before''?
+Similarly,  $E[t][\mathit{fid}]$ is defined
+if and only if
+the future  $\mathit{fid}$ has been resolved in  $E[t][oid']$ by some object  $oid'$.
+
+\item[Partial Ordering:]%
+%[Partially Ordered by the ``after''-Relation]
+Each system execution  must satisfy a partial ordering 
+(called \textbf{after}) relating the different object executions  as
+follows: 
+%Each object execution %of an object $o$ (of class $C$) 
+%must satisfy
+\begin{itemize}
+\item The first state of an object of class $C$
+(other than the initial object)
+ %must %be the beginning of its initiali
+must occur \emph{after}
+%NOTE during if synchronized ....
+the object has been generated by a new $C$ construct
+and must be the start of its initialization part (with an object state
+reflecting class parameters). 
+The object  mapping is extended
+by associating the new object identity with this object execution.
+\item The start of a method execution by an object $o$ must appear \emph{after} 
+      the corresponding call.
+\ignore{\item the next step of an execution of $o$ must  be the next statement
+      in the branch of the active process (evaluating if tests and following the
+      appropriate branch), unless it is an await or get statement, or local call.}
+\item A blocking \emph{get} must be executed \emph{after} 
+      the future value has been generated.
+\item 
+%a state representing the next statement 
+%the state   representing the state \emph{after}
+The execution of  an \emph{await} of a process $p$
+must occur \emph{after} the await is enabled 
+%(and when it is the next  state of the process $p$) 
+and may only appear after an idle state.\footnote{Do we need to worry here about awaits that are disabled again before they run?}
+\ignore{
+    if the next statement is an await the remaining process (including
+   the await and and the local state) is placed on the process queue of the
+   object, allowing the object to proceed with another process on the
+   queue, provided it is enabled.}
+\item When a \emph{put} is executed (finishing the current process) 
+% the current process is said to be   inished and
+the future  mapping is extended by associating the produced
+value with the  future identity of the current process (and we say that the future value has been
+  generated). The object is in \emph{idle} state.
+%\item The execution  of objects not generated (apart from the initial object)  %is $\bot$, and the future value of futures not (yet) produced is $\bot$.
+\end{itemize}
+\end{description}
+The last two properties  may be proved by induction from a detailed operational semantics
+such as that from Din et al.\cite{Din12jlap}.
+
+\begin{definition}[Unbounded Number of Calls]\label{def-unbounded}
+  A system execution is said to produce \emph{an unbounded number of
+    calls} (of a certain kind) if for every bound there is a time $t$
+  such that the system execution at time $t$ has a higher number of
+  calls (of the given kind) than the bound.
+\end{definition}
+
+\begin{definition}[Flooding]\label{def-flooding-ex}
+  An execution is flooding if it produces an unbounded number of
+  uncompleted method calls.  It is flooding wrt.\ a method $m$ if it
+  produces an unbounded number of uncompleted method calls to $m$.
+\end{definition}
+
+
+The theorem below expresses that our algorithm covers all possible floodings
+(no false negatives).
+
+\begin{theorem}[No false negatives]
+\label{theorem-main}
+If there is an execution of a given program which is flooding wrt.\ a
+method $m$, our algorithm detects flooding of a call to $m$ or of a
+call $m'$ such that flooding of $m'$ implies flooding of $m$.
+\end{theorem}
+\section{Proofs}
+
+%\ignore{ move??
+\textbf{Notation} of nodes: we write $call_n, put_n$, $start_n$
+   where $n$ is the label of the corresponding call, and
+   $get_s$  where  $s$ is a single label or a label set.
+   %Similarly start nodes are indexed by the label of the corresponding call.}
+
+
+In order to prove  theorem \ref{thm-flooding}
+we first define a notion of execution tree, and then prove that flooding
+wrt.\ a given cycle and method call 
+%implies that there are uncompleted calls in the execution trees.
+%We prove below that flooding according to definition   \ref{flooding-cycle} 
+implies that there is an uncompleted call in some execution tree (by
+lemma \ref{lemma-wr}% and \ref{{lemma-call-chain}}
+), and secondly that an uncompleted call
+in an execution tree implies that there is an uncompleted call in the
+static graph of cycle $C$ used in the detection algorithm (by
+\Blue{lemma \ref{lemma-sr}, which states that a node is SR it is in
+  all execution trees of cycle $C$.}).
+%\Blue{The rest of the proof follows by lemmas ....}
+
+% We first reduce and simplify the set of
+%executions without removing flooding of $m$. 
+%such that for each flooding execution there is a flooding
+%execution in the reduced execution set.
+%
+\ignore{ Consider an execution flooding wrt.\ a given call of $m$.  We
+  will show that there also is an execution that does not stop before
+  an enabled step (apart from start nodes) such that it is flooding
+  wrt.\ the given call. We consider two cases of enabled steps,
+  deterministic (unconditional) statements, and (blocking or
+  non-blocking) statements depending on a future (\emph{get}).
+
+   We first observe that for an execution not including such a step,
+   the execution extended with the step at some time $t$ when the step
+   is enabled, is a possible execution according to the partial order
+   semantics (which describes the possible executions).
+
+%1. Deterministic steps
+   \begin{description}\item[Deterministic statements]
+   (assignments, simple calls, local calls, object generation, and skip):
+   \footnote{The partial order semantics describes the possible executions.  It
+   captures independent object speeds.  It is obvious that for
+   non-interfering, deterministic object execution steps, 
+%except when waiting is involved, 
+   the final outcomes are the same, regardless of how fast these are executed.
+%One may therefore move  non-interfering, deterministic object
+%execution steps forward (as long as they are enabled).
+
+    We may pretend that deterministic execution steps take no time
+   (not changing the time of  execution of start nodes and continuations 
+    of \emph{get}s and \emph{await}s).
+}
+%of a blocking or suspending wait.
+This \emph{simplification} will mean that some calls are produced earlier 
+%(which is OK with respect to flooding, i.e., 
+%flooding cannot disapear by earlier occurrence of calls), 
+and that some \emph{put}s will appear earlier.
+This will not cause flooding of $m$ to disappear,
+because flooding cannot disappear by earlier
+occurrence of calls, and not by earlier \emph{put}s
+%The latter will not cause flooding of $m$ to disappear
+ because there are
+only finitely many objects $y$ that can execute $m$.
+Therefore, to find a time where the simplified
+execution has  more than $x$ uncompleted $m$ calls,
+% in the modified execution, 
+we take an original execution at a time where there are $x+y$
+uncompleted $m$ calls, % in the origial execution, 
+which exists by the assumption of unbounded number of uncompleted $m$ calls.
+%
+Thus we may assume that at any time $t$ an object $o$ is either idle
+or is waiting in a blocking \emph{get}.
+
+%2. gets:  (get or await)
+\item[\emph{get} statements in a method other than $m$]
+%Consider first method executions other than $m$.
+Blocking \emph{get}:
+In this case, the  execution of a specific  get is never done,
+even after being enabled.
+%Doing this step  will not affect $m$ executions if 
+By doing the step in a method other than $m$,
+$m$ executions  are not affected.
+%\item[Suspended \emph{get} statements] 
+
+   Suspended get in a method other than $m$: If done by an object
+   being flooded with $m$, $m$ executions may be delayed, for other
+   objects $m$ executions are not affected.  In either case, flooding
+   is not reduced.  If the object is deadlock...
+   \end{description}
+
+   \footnote{(Note that wrt.\ await on condition:
+   the algorithm will not know that such conditions are enables,
+   and will treat them as unabled.)}
+================================= ignore =============================}%
+%
+\ignore{Thus it suffices to consider executions such that
+the \emph{after}-relation is giving priority to active processes as long as
+the next step is enabled (i.e., it is not in a blocking get and
+unresolved get/await).  Thus a new call is started after all active
+processes have reached an idle state or a blocked get (or end of loop,
+if the cycle is a loop).
+%This is a benefit of the partial order semantics!
+Similarly
+we may also assume that resumption of suspending \emph{get}s  (await on a
+future) are not unnecessarily delayed when the future is available;
+thus we do not distinguish blocking and suspended \emph{get}s  wrt.\ delays,
+both are assumed to continue without delay when the future value is
+present. }
+%==========end of reduction of possible executions
+%
+%\textbf{Note:} In the discussion below we restrict ourselves to simplified executions.
+%
+
+
+
+Consider a system execution $E$ %, flooding wrt.\ $m$ and
+with unbounded iterations of a cycle $C$.
+We define the execution tree of iteration i, denoted $T_{E,C,i}$, reflecting 
+all executions in $E$  caused by %$C$  during 
+ iteration $i$ of the cycle, 
+considering all % one or more 
+involved objects.
+
+\begin{definition}[Execution Tree]\label{def-tree} 
+The execution tree $T_{E,C,i}$  of a system execution $E$ with unbounded  
+iterations of the cycle $C$ 
+%and with unbounded number of calls to $m$,
+is  obtained from  $E$ 
+% given by 
+by % taking the $i$th iteration of the cycle,
+taking the start node of the  $i$th  iteration as the root,
+and  including 
+\begin{enumerate}
+\item \label{def-tree-cycle}
+all steps in the cycle iteration except the back edge
+\item \label{def-tree-method} \OO{all steps  in $E$
+ordered \emph{after} a step already in the tree, according to the 
+partial \emph{after} ordering (letting call edges form the branches)}
+\item  \label{def-tree-flows} \OO{
+the continuation of processes with states already in $T$ over time.}
+
+\ignore{ all states that happen \emph{after} (according to the assumed
+  semantic partial order) a node all ready in T and before some other
+  state already in T,}
+\ignore{ all method executions in $E$ directly or indirectly called
+  from the iteration at some time. (These executions form the
+  branches).}
+\ignore{
+  \item \label{def-tree-flows} all steps in these method executions
+  as long as  each  \emph{get} or  \emph{await}  is resolved within 
+  the tree or by completions before the start of the iteration.}
+  % restricted to calls caused by that iteration%
+\end{enumerate}\end{definition}
+   \ignore{ The execution tree $T_{E,C,i}$ is the set of trees extending 
+    the cycle $C$ (minus the back edge) %(without the cycling call) 
+    with possible paths through off-cycle parts 
+    and with some  invocations, such that
+   \begin{enumerate}
+   \item each method execution ends at a $put$, or just before an  $await$ or
+    a  $get_l$ when the corresponding $put_l$ is not in the tree,
+    %at a $get_k$ when $call_k$ is not completed (see below) or at an await,
+    and finally
+    \item for each $get_l$ in the tree, there is a  $put_l$ in the tree.
+   (Unlabeled \emph{get}s  are possible ...)
+
+  \ignore{all states in a process that already has states in T up to the
+   but not including a blocked get or await, or through the end of the
+   process/method including the put, whichever occurs first.}
+   \end{enumerate}}
+Clearly  for every start node in
+the tree (apart from the root) there is a matching call in the tree.
+Flooding calls will in general not be in all  executions  $E$
+and therefore not in all execution trees.
+%
+The tree may be infinite (in case of inner, direct or indirect,
+recursion in the cycle) since we do not limit the time. However, we
+will be interested in properties of textual occurrences of calls,
+and there will only be a finite number of these. %labels involved.
+%
+Note that according to the object progress assumption, 
+  \ignore{all the active method execution of an object ends in an
+    unresolved \emph{get} or an \emph{await}.  Enabled processes are
+    performed unless there is an unbounded number of them. Thus
+    execution trees have a third property
+% \begin{enumerate}\setcounter{enumi}{2}
+ \item \label{def-tree-flows}}%
+\OO{all method executions partly in the cycle must terminate or
+ end in an unresolved  \emph{get} or  an \emph{await}.
+ It does not ensure that called methods will eventually start to execute.}
+\ignore{
+   Since there is a finite number of objects involved in the cycle,
+   these cannot be blocked. The next cycles would then be blocked.}%
+%\end{enumerate}
+%
+\ignore{
+each method execution will end with an unresolved \emph{get} or
+\emph{await},
+%unless the object has an unbounded number of processes.
+\begin{itemize}
+\item \label{def-tree-flows} 
+all started method executions end in an unresolved
+ \emph{get} or  \emph{await}  
+     \ignore{ all steps in these method executions as long as each
+     \emph{get} or \emph{await} is resolved within the tree or by
+       completions before the start of the iteration.}
+\end{itemize}}
+%objects involved in the cycle....
+
+%Consider all possible system executions. 
+
+%\subsection{ADJUSTMENTS MAY BE NEEDED FROM HERE}
+\ignore{%==============================================================
+\subsection{Long Version}
+
+
+\begin{definition}[Object Execution Trace]\label{def-object-ex}
+An \emph{execution trace of a given object} of given class at 
+a given point in time may be seen as a  finite 
+%or infinite 
+sequence of execution states, where
+%, infinite if the execution does not terminate. 
+% Each state is indexed by the corresponding node (label)
+% in the program (graph), and
+each state includes relevant information such as 
+%future identities and 
+object state and local state, as well as the program counter value (and label in the program graph), 
+and the unique future value of the execution of the current process.
+%We say that a state is an s-state if labeled by a statement s.
+\ignore{It has a process queue, consisting of (internal and external)
+  method executions and remaining parts of processes starting with an
+  await on a condition or a future.  A process on the queue is enabled
+  if the it starts with an await on a condition that evaluates to
+  true, or with an await on a future.  A condition is enabled ...}
+The execution reflects method executions performed by the object, and 
+must satisfy some basic properties concerning first and next states:
+\begin{itemize}
+\item
+It must start with a state labeled with
+the first statement of %a branch through
+ the initialization part of the class
+(which is the only time this initialization appears in the execution of that object).
+\item
+The next state after a state with a given program counter value
+%The next step after an execution of a statement 
+must have the counter value of the next statement
+(evaluating if-tests and following the
+appropriate branch), 
+unless it is a put statement or an await on a condition or a future,
+ in which case the next state is the \emph{idle} state,
+or a local call, in which case the next state 
+has a counter value which 
+corresponds to the first statement of the called method;
+and in this case the next statement after the end of the 
+execution of the locally called method, is the statement following
+the local call.
+
+%\item \Blue{After return from a local call, the next statement is the 
+%next after the call statement ....}
+\item
+The next state after idle may only be a start of a  method (of C)
+or a state representing the next statement
+after a previous await state
+of an uncompleted process.
+%corresponding to methods performed by the object.
+\end{itemize}\end{definition}
+Execution of (blocking) \emph{get}s  and idle states 
+depends on the  execution of  the whole  system as explained below.
+
+%========================= System Execution  =================================
+\begin{definition}[System Execution, System Trace, and Monotonicity]\label{def-system-ex}
+An \emph{execution of an object system} (including one initial  object)  is defined by 
+\Blue{a set of historically monotone system traces, each reflecting the execution %of each object 
+up to  a given time.
+As defined below the monotonicity requirement  expresses  that they agree on past traces.
+A \emph{system trace} is a partial mapping from object identities to}
+object execution traces, one for each object in the system,
+together with a set of (shared) futures, given by a partial mapping of
+future identities to values (reflecting generated future values), and
+with a partial ordering 
+(\emph{after}) relating the different object execution traces as
+follows: The execution trace of each object $o$ must satisfy
+\begin{itemize}
+\item the first state of an object of class $C$
+(other than the initial object)
+ %must %be the beginning of its initiali
+must occur \emph{after}
+%NOTE during if synchronized ....
+the object has been generated by a new $C$ construct,
+and must be the start of its initialization part (with an object state
+reflecting class parameters)
+\item the start of a method execution must
+appear \emph{after} the corresponding call, and the call must be on $o$
+\ignore{\item the next step of an execution of $o$ must  be the next statement
+in the branch of the active process (evaluating if tests and following the
+appropriate branch), unless it is an await or get statement, or local call.}
+\item a blocking get must be executed \emph{after} the future value has been generated
+\item 
+a state representing the next statement \emph{after} an await of a process $p$
+must occur \emph{after} an idle state when the await is enabled (and when it is the next 
+state of the process $p$). % and when the previous state reaches an idle state.
+\ignore{
+if the next statement is an await the remaining process (including
+  the await and and the local state) is placed on the process queue of the
+  object, allowing the object to proceed with another process on the
+  queue, provided it is enabled.}
+\item when a put is executed (the current process is said to be
+  finished and) the future  mapping is extended
+by associating the produced
+value with the   future identity (and we say that the future value has been
+  generated). The object is in \emph{idle} state.
+\item The execution trace of objects not generated (apart from the initial object)  is $\bot$,
+and the future value of futures not (yet) produced is $\bot$.
+\end{itemize}
+The set of system states must be historically monotonic
+in the sense that any two  system states $s1$ and $s2$ must satisfy $s1\leq s2$ or  $s2\leq s1$,
+where $s1\leq s2$ means that 
+$s1[oid] \not=\bot  \Rightarrow s1[oid] \leq s2[oid]$, for each object identity $oid$
+and $s1[\mathit{fid}] \not=\bot  \Rightarrow s1[\mathit{fid}] =s2[\mathit{fid}]$, for each future identity $\mathit{fid}$.
+\end{definition}
+%
+\ignore{OLD: 
+An infinite execution is captured by an unbounded set of finite execution sets
+(one for each object)
+such that the set is prefix-closed (i.e.,  the set  of all finite initial parts of the execution).
+We say that an execution is flooding if
+An infinite execution is captured by an unbounded set of finite executions
+such that the set is prefix-closed (i.e.,  the set  of all finite initial parts of the execution).}
+
+\begin{definition}[Unbounded Number of Calls]\label{def-unbounded}
+A  system execution is said to produce \emph{an unbounded number of calls} (of a certain kind)
+if for every bound it has a trace with a higher number of  calls (of the given kind).
+\end{definition}
+
+\begin{definition}[Flooding]\label{def-flooding-ex}
+An execution is flooding if it produces an unbounded number of
+uncompleted method calls.
+It is flooding wrt.\ a method $m$ if it produces an unbounded number of
+uncompleted method calls to  $m$.
+\end{definition}
+
+
+The theorem below expresses that our algorithm covers all possible floodings
+(no false negatives).
+
+\begin{theorem}[No false negatives]
+\label{theorem-main}
+If there is an execution of a given program which is flooding wrt.\ a method $m$, 
+our algorithm detects flooding of a  call to $m$ or of 
+a call  $m'$ such that flooding of $m'$ implies flooding of $m$.
+\end{theorem}
+
+\textbf{Notation}
+of nodes: we write $call_n, get_n, put_n$, and $start_n$
+where $n$ is the label of the corresponding call. 
+%Similarly start nodes are indexed by the label of the corresponding call.
+
+
+%\textbf{Proof: }
+\begin{proof}
+Assume that there is an execution $E$ of a given program with flooding
+wrt.\ a method $m$.  We need to prove that flooding of a call to $m$
+is detected (or at least a call $m'$ such that flooding of $m'$
+implies flooding of $m$).
+
+
+Consider an execution $E$ which is flooding  wrt.\ to method $m$.  Since
+there are finitely many $m$ calls in the code, the execution must also
+be flooding  wrt.\ one of these calls, say labeled $n$.  Thus it suffices
+to consider each textual call rather than each method.  Let us assume
+that $call_n$ is flooding in given execution $E$.
+%%For  $E$  the call $call_n$
+This call must be caused by a cycle $C$, repeated without bound.  (%In $E$ 
+The cycle may be interleaved with other flooding or non-flooding
+cycles.)  Thus the call $call_n$ must occur in a method
+which is called (directly or indirectly) from an iteration of  the cycle,
+i.e., \emph{there must be a call path from the cycle to the call}.
+%the call  $n$  may be off-cycle).
+%
+\textbf{Note:}
+Thus flooding wrt.\ $m$ in the sense of \ref{def-flooding-ex}  implies 
+flooding wrt.\ a cycle in the sense of \ref{flooding-cycle}\,. 
+
+
+Consider a repeated cycle involving one or more processes.
+At the time when the next iteration of the cycle starts there may be some remaining parts
+of processes started in the previous  iteration of the  cycle. 
+%Since these are processing have the any remaining bort
+Flooding occurs when an object over time gets more processes to do  
+than it can handle. Each iteration of a cycle may
+generate new calls on some objects and may leave some unfinished
+processes. However, the unfinished processes are already active,
+and new processes on that object  generated in  the next cycle cannot start
+until the previous ones are finished or suspended.
+Assuming there is a bounded number of objects, the same objects will
+be involved in  future cycles, and if one of these %that object 
+is busy, the cycling will need to wait.
+\textbf{Note:} Thus flooding due to blocking \emph{get}s  is not a problem for objects
+involved in the cycle.\footnote{
+   NOT NEEDED?  Thus flooding can be caused by called methods
+   being delayed, or by suspended parts of remaining processes
+   being disabled.}%
+\footnote{DO WE NEED THIS? 
+   Thus it suffices to look at calls generated by a cycle and remaining
+   parts of processes \emph{after} suspension.  Remaining processes without
+   suspension do not cause flooding.  And suspension while waiting for
+   a future can not cause flooding if the future value is available
+   (assuming that a suspending get has priority over new calls when
+   enabled).  Thus flooding may be caused by calls generated by the
+   cycle, remaining parts of processes after an await or a get on a
+   future not ready.  }%
+\footnote{MAY NOT NEED ANY LONGER? We may need to assume there is no
+  deadlock.  With respect to possible executions: we assume that a
+  method execution that has started continues until the end or to an
+  internal loop or to an await with a false condition or to a get
+  where the future value is not available.  A called method may be
+  delayed (reflecting that process speeds are independent and may also
+  depend on scheduling).}
+%
+\ignore{REUSE DEFINITION IN NEW CONTEXT, SKIP OTHER PARTS: 
+ The cycle $C$ can be seen as a sequence of nodes starting with a start
+ node of some method $p$ (or start node of a loop) following one
+ possible path through that method (loop). At a call it may continue
+ with the start node of the called method (following one possible path
+ through that method) or continue with the path through $p$, and so on
+ (involving zero or more methods calls), until it reaches a call back
+ to $p$ (or end of the loop body).  There may be some remaining parts
+ of the methods started during the cycle, called \emph{off-cycle part}
+ (e.g.\ $put:2$ in fig.\ \ref{graph-modified}), and there may be some
+ method calls leading out of the cycle (e.g.\ $Pd:1$ in
+ fig.\ \ref{graph-modified}) . % ("off-cycle calls").
+ The flooding call $call_n$ must be in the cycle, in off-cycle parts, or 
+ in methods directly or indirectly called from the cycle or off-cycle parts. 
+
+ Consider the set of execution trees $T_{C,i}$ reflecting possible
+ executions during one iteration $i$ of the cycle, considering one or
+ more involved objects.  Execution of called methods are included if
+ they are started during the cycle (before the next iteration) and
+ suspension is ignored if resolved during the cycle iteration.
+ \begin{definition}[Execution tree]\label{def-tree}
+  The set of execution trees $T_{C,i}$ is the set of trees extending
+  the cycle $C$ (minus the back edge) with possible paths through
+  off-cycle parts and with some  invocations such that
+ \begin{enumerate}
+  \item $call_n$ (the call causing the flooding) is in the tree, and 
+  \item for every start node there is a matching call in the tree,    and  
+ %(apart from the initial start node of $p$) %every invocation is called from the  tree,
+  \item each method execution ends at a $put$, or just before an
+   $await$ or a $get_l$ when the corresponding $put_l$ is not in the
+   tree,
+ %at a $get_k$ when $call_k$ is not completed (see below) or at an await,
+  and finally
+  \item for each $get_l$ in the tree, there is a  $put_l$ in the tree.
+ \end{enumerate}\end{definition}
+ The first point says that we are only considering flooding iterations;
+ the second that only relevant calls are considered; the third that an
+ unfinished execution must be in an unresolved waiting condition; and
+ the last point says that the tree is self-contained in the sense that
+ it includes all method executions known to complete, and all nodes of
+ the chosen path of that execution must be in the tree, including
+ $get$s to other methods (which may in turn mean that yet other
+ \emph{put}s must be in the tree).  A call $call_l$ without a start
+ node in the tree (in which case there is no $get_l$ in the tree),
+ reflects that the call was delayed until after the cycle.
+ = END IGNORE =====================}
+
+%\textbf{Note:} 
+The partial order semantics describes the possible
+executions.  It captures independent object speed.  If an execution is
+flooding with respect to a method $m$ for some execution $E$, it is
+also flooding in executions where the starts of executions of $m$ are
+ (more or less) delayed.  
+\Blue{It is obvious that for non-interfering, deterministic object
+execution steps, the final outcomes are the same, regardless of how
+these are ordered.}  Thus it suffices to consider executions such that
+the \emph{after}-relation is giving priority to active processes as long as
+the next step is enabled (i.e., it is not in a blocking get and
+unresolved get/await).  Thus a new call is started after all active
+processes have reached an idle state or a blocked get (or end of loop,
+if the cycle is a loop).
+%\footnote{this is a benefit of the partial order semantics!}
+Similarly
+we may also assume that resumption of suspending \emph{get}s  (await on a
+future) are not unnecessarily delayed when the future is available;
+thus we do not distinguish blocking and suspended \emph{get}s  wrt.\ delays,
+both are assumed to continue without delay when the future value is
+present. \textbf{Note:} In the discussion below we restrict ourselves to such 
+executions.
+
+
+
+Consider a system execution  $E$ with unbounded iterations of a cycle $C$.
+We define the execution tree of iteration i, denoted $T_{E,C,i}$, reflecting 
+all executions in E caused by C during  iteration $i$ of the cycle, 
+considering one or more involved objects.
+\footnote{OLD TEXT  - REDO:
+ Execution of called methods (identified by the future identities  of the calls) are included if they are started 
+ in $E$
+% during   the cycle (before the next iteration) 
+and suspension is ignored if resolved during the cycle iteration.}
+ 
+\begin{definition}[Execution Tree]\label{def-tree} 
+(MAY NEED TO ADJUST A BIT MORE!)
+The execution tree $T_{E,C,i}$ 
+ of a given system trace $E$
+ with at least $i$ iterations of the cycle and with at least
+ $i$  calls to the  flooding method,
+ is the system trace $E$ 
+ given by the $i$th iteration of the cycle
+ (without the start of the next iteration), 
+ restricted to calls caused by that iteration%
+ \ignore{  The execution tree $T_{E,C,i}$ is the set of trees extending 
+  the cycle $C$ (minus the back edge) %(without the cycling call) 
+  with possible paths through off-cycle parts 
+  and with some  invocations},
+such that
+\begin{enumerate}
+% \item $call_n$ (the call causing the flooding) is in the tree, and 
+ \item for every start node there is a matching call in the tree,  %(apart from   the initial start node of $p$)
+  %every invocation is called from the tree,
+  and  
+ \item each method execution ends at a $put$, or just before an  $await$ or
+  a  $get_l$ when the corresponding $put_l$ is not in the tree,
+  %at a $get_k$ when $call_k$ is not completed (see below) or at an await,
+  and finally
+  \item for each $get_l$ in the tree, there is a  $put_l$ in the tree.
+(Unlabeled \emph{get}s  are possible ...)
+\end{enumerate}
+
+\end{definition}
+Note that 
+$call_n$ (the call causing the flooding) is in the tree,
+(since %The first point says that 
+we are only considering  flooding iterations).
+the first point says  that only relevant calls are considered;
+the second that an unfinished execution must
+be in an unresolved waiting condition; and 
+the last point says that 
+the tree is self-contained in the sense that it includes
+%we must include 
+all method executions known to complete,
+and all nodes of the chosen path of that execution must be in the tree,
+including $get$s to other methods (which may in turn mean that yet other
+\emph{put}s must be in the tree). 
+A call $call_l$  without a start node in the tree
+ (in which case there is  no $get_l$ in the tree), reflects that 
+the call was delayed until after the cycle.
+\footnote{since in the set of traces we may stop before a start node.}
+
+
+
+A tree will be finite since there are finitely many labeled calls,
+and each labeled call can only give rise to one 
+start node and corresponding  path through the method.
+
+}%=====================end ignore LONG VERSION ==========================
+
+\begin{definition}[Execution Tree Set]\label{def-tree-set}
+ The set of execution trees
+ $T_{C}$ 
+is the set of execution trees $T_{E,C,i}$ 
+for all possible system executions $E$ 
+with an unbounded number of $C$ iterations, and for any possible iteration $i$.
+%traces E of a system execution  with an unbounded number of C iterations,
+%and for any possible iteration i.
+\end{definition}
+%
+\ignore{MERGE WITH EARLIER TEXT??
+The set of possible trees reflect
+that continued execution of the remaining part of a  method 
+is fast as long as there is no suspension (i.e. no time).
+ Suspension may take no time or non-trivial time. Similarly
+execution of a new method may take no time or non-trivial time.
+Thus an execution tree may or may not be cut at any such  point.
+We assume here that a get on a completed call takes "no time".}
+%may or may not take Since time needed in cases of suspension or
+%invocation depends on the execution and may range from zero time to
+%non-trivial time.
+\ignore{ The set of trees $T_{C}$ represents possible executions of an
+  iteration of cycle $C$ where method executions not in the tree are
+  delayed.  For each iteration of of the cycle in an execution, there
+  will be a tree, reflecting the activity related to the iteration up
+  to the point where the next iteration starts.
+     A call with label $k$ is said to be \emph{completed} in a tree
+  $T_{E,C,i}$ if a $put_k$ or $get_k$ is in the tree.
+}% end ignore
+%
+A call with label $k$ is said to be  (possibly) reachable if  
+$call_k \in %%%%%%%%%%%%%%%%\bigcup_{E,i}  
+T_{E,C,i}$ for some $E$ and $i$.
+A call $k$ is (surely) completed if 
+$put_k \in %%%%%%%%%%%%%%%\bigcap_{E,i}  
+T_{E,C,i} $ for all  $E$ and $i$.\footnote{Or $get_k$?
+No, there must be a put before get}
+% or  $get_k\in \bigcap_i T_{C,i} $
+We define $\callsE$ by the label set $\{n \,|\, \exists\ E,i \ .\  call_n\in T_{E,C,i}\}$, and 
+$\compsE$ by $\{n \,|\,  \forall\, E,i\ .\  put_n\in T_{E,C,i}\}$.
+
+We next show that  $ \callsE$ is 
+%the same as the 
+ %overapproximates 
+contained in the set of  calls   detected,  
+and  that all detected  $comps$ are in 
+$\compsE$. % is the same as  the detected $comps$.
+%(TODO: this is  not quite true since we may detect a call m' such that
+%flooding of m' implies flooding of $call_n$).
+Thus if 
+a call $n$  is flooding in some execution,
+$n$ is in  $ \callsE-\compsE$, and thus
+in  $ \callsD-\compsD$, i.e., the flooding call  must be detected.
+
+
+
+
+\ignore{====================OLD=============
+    In the analysis below we look at reachable nodes in the graph
+    $G_{C,E}$ consisting of the cycle $C$ (following only the chosen
+    path where there is branching), remaining method parts (including
+    all paths), and also called methods.  The nodes of $G_{C,E}$ are
+    reachable from the cycle and the set of calls in $G_{C,E}$ is
+    called the reachable calls of the cycle, denoted $ calls_{C}$.
+
+   $call_n\in G_{C,E}$
+
+   $\callsE= \{n| call_n \in G_{C,E}\}$
+
+   For given execution E and cycle C, we may look at all calls
+   reachable from an iteration of the cycle, say $calls_{E,C}$. We
+   must have $n\in calls_{E,C}$ And if we look at all completions,
+   $comps_{E,C}$, that are made in every iteration of the cycle, we
+   must have $n\not\in comps_{E,C}$.  I.e., the call is in the cycle
+   or reachable from the cycle, and the call is not completed an
+   unbounded number of times.
+
+
+   We next define $ calls_{C}$ and $comps_{C}$ such that the former
+   over-approximates $ calls_{E,C}$ and the latter under-approximates
+   $comps_{E,C}$.  Thus if $n$ is in $ calls_{E,C}-comps_{E,C}$ it
+   must also be in $ calls_{C}-comps_{C}$.
+
+   $ calls_{C}$ consists of all calls $n$ such that
+
+  \begin{itemize}
+  \item call $n$ is in $C$
+  \item  call  $n$  is in some  off-cycle path of $C$
+  \item call $n$ is in some method called by $C$ (directly or
+  indirectly)
+  \end{itemize}
+   $ comps_{C}$ consists of all calls $n$ such that
+  \begin{itemize}
+  \item put  $n$  is in $C$
+  \item get  $n$  is in $C$
+  \item put/get $n$ is reachable in each path of an off-cycle path of $C$
+  \item put/get $n$ is  in each path of a method in $ calls_{C}\cap  comps_{C}$
+  \end{itemize} %if a call i is in the cycle it is in
+}
+\ignore{Note:
+ consider the cyclic program
+ m(){if ... then f:= call m1 else f:= call m2 fi;
+    get f; call m (): put}
+ Here we would need two put-get edges, one from m1 and one from m2
+}
+\footnote{\textbf{Note:} There could be a node $get\, f$ in the cycle
+  where the future f is defined outside the cycle, say by a parameter
+  or a field.  Will this be a Problem for our definitions?  \Blue{Such
+    a $get\ f$ can be handled as an $await$ since completion cannot be
+    detected.}  }
+%{\textbf{Note:}}
+\ignore{
+\subsection{MAY NOT NEED:  Alternative  Executions}
+\emph{Motivation:  Rather than trees $ T_C,j$
+  we  consider initial parts of executions
+  (which is the real thing when it comes to semantics).}
+
+   An \emph{execution} can then be seen as a finite (if the execution
+   stops) or infinite (if the execution does not stop) sequence of
+   states, augmented with relevant information about executing nodes
+   etc.  Flooding of a cycle $C$ wrt.\ a method $m$ would mean that
+   there are one or more infinite executions where $C$ is repeated
+   infinitely and there are infinite number of calls to $m$.
+
+   We assume that each process has no infinite sequence of execution
+   steps until the process reaches a \emph{resting} state,
+   i.e.\ process end, a blocking get, or a suspension point (await).
+
+   %If the call back to the cycle is a local, blocking call 
+   \ignore{ For such an execution $E_C$ we let $E_C,n$ mean the
+     finite, initial part of $E_C$ ending just before the $n+1$th
+     iteration of $C$, letting each object (apart from the one doing
+     the start of the cycle -- in case of recursion?) reach a resting
+     state.  (If there is flooding of $C$ wrt.\ a method $m$, there is
+     also flooding of $C$ wrt.\ a method $m$ for an execution of this
+     kind, since all possible object speeds must be considered.)}  }
+
+\ignore{We may continue more or less as before.  For each
+  iteration/occurrence of the cycle $C$ in such an execution $E$, we
+  define the associated execution tree $T_{E,C}$ which contains the
+  occurrence of the cycle $C$ extended with call edges and start nodes
+  for called methods starting to execute before the next iteration of
+  the cycle, letting each execution end in a waiting, blocking or
+  ending node.  By induction on the set of execution we know that ...
+  same def as before (more or less)...  to be completed.}
+
+
+%\paragraph{Observation:}
+\begin{lemma}
+\label{lemma-await}
+ We may ignore executions where await on a future is 
+treated different than get, in the sense that the set of floodings
+in the first case is not larger than the set of floodings in the 
+latter case.
+\end{lemma} 
+\begin{proof}
+We first observe that 
+with the under-specified scheduling of our partial order semantics,
+a possible way of implementing suspending gets is
+by implementing them as a (blocking) get.
+It then suffices to prove that 
+executions different from those using a blocking get,
+do not provide more flooding.
+
+A method execution of blocking rather than suspending
+may contribute to flooding since it may not terminate.
+However, if there are unbounded many calls to such methods,
+the method executions can be delayed before start, rather than
+at an await. 
+In case the there is a call back in the first part of the method
+(before a suspending get), 
+this may or may not be the call back of the current cycle $C$.
+In the first case, the executing object 
+the completion of the current call is not strongly reachable,
+so flooding in this case is detected.
+In the second case,
+we have a shorter cycle that is flooding.
+Therefore  flooding of this method is already possible.
+
+A call $n$ occurring after a suspending get, may never be
+performed with executions that perform  suspending gets by blocking.
+% rather than suspend. 
+ However, these calls will be weakly reachable
+and thus count in the static  detection of flooding.
+The same argumentation applies to calls indirectly caused by %the 
+call $n$.
+%path starting after a suspended get.
+
+
+Anything else...
+
+\ignore{
+Consider an execution $E$ where the execution of 
+an await on a future in a given process %method instance 
+is reached at time $t$.
+It could be that the await is never enabled,
+or that it is  enabled at time $t'>t$
+(in which case the process will continue to be enabled until executed).
+In the latter case 
+the await may 
+never be executed or it may be executed at time  $t''>t'$.
+Compare this execution to an execution $E'$ where the await statement
+is executed like a blocking get.
+%, at some time $t`>t$, and such that the two exeutions are
+%equivalent up to time $t'$.
+
+If the process represent the flooding method ...}
+\end{proof}
+
+
+
+\input{charlieProof.tex}%========================================
+
+\subsection{Proof of Theorem \ref{theorem-main}}
+\begin{proof}
+%\noindent\textbf{Proof of theorem \ref{theorem-main}.}
+Assume that there is a system execution $E$ of a given program with
+flooding wrt.\ a method $m$.  We need to prove that flooding of a call
+to $m$ is detected (or at least a call $m'$ such that flooding of $m'$
+implies flooding of $m$).
+
+Consider a system execution $E$ which is flooding  wrt.\ to method $m$.  Since
+there are finitely many $m$ calls in the code, the execution must also
+be flooding  wrt.\ one of these calls, say labeled $n$.  Thus it suffices
+to consider each textual call rather than each method.  Let us assume
+that $call_n$ is flooding in given execution $E$.
+%%For  $E$  the call $call_n$
+This call must be caused by a cycle $C$, repeated without bound.  (%In $E$ 
+The cycle may be interleaved with other flooding or non-flooding
+cycles.)  Thus the call $call_n$ must occur 
+in the iteration of the cycle, or in 
+a method called (directly or indirectly) from the iteration,
+i.e., there must be a call path from the cycle to the call.
+%the call  $n$  may be off-cycle).
+Thus flooding wrt.\ $m$ in the sense of \ref{def-flooding-ex}  
+implies flooding wrt.\ a cycle in the sense of \ref{flooding-cycle}\,.
+The theorem therefore follows by theorem \ref{thm-flooding}\,.
+%proved below. 
+\end{proof}
+%=======================================================================
+
+\ignore{%=============================================================== 
+  Before proving \ref{thm-flooding} we first reduce and simplify the
+  set of executions without removing flooding of $m$.
+  \begin{lemma}[Reduced execution set]
+  \label{lemma-reduced-set}
+  If there is an execution of a given program which is flooding wrt.\ a
+  method $m$, our algorithm detects flooding of a call to $m$ or of a
+  call $m'$ such that flooding of $m'$ implies flooding of $m$.
+  \end{lemma}
+  \noindent\textbf{Proof of lemma \ref{lemma-reduced-set}.}
+  }%====================================================================
+
+
+% LocalWords:  wrt

@@ -7,6 +7,9 @@
 \pdfoutput=1
 
 \input{preamble}
+
+	
+\renewcommand{\qedsymbol}{\rule{1ex}{1ex}}
 \definecolor{shadecolor}{rgb}{0.9,0.9,0.9}
 \newcommand{\Blue}[1] {\textcolor{blue}{#1}}%{\textsf{#1}}%
 \input{definitions}    
@@ -20,13 +23,17 @@
 \newcommand{\get}{get\xspace}%{\textsf{#1}}%
 \renewcommand{\NEW}[1]{#1}%{\Blue{#1}}%{\textcolor{blue}{\textit {#1}}}%{\textsf{#1}}% {#1}
 %\renewcommand{\RED}[1]{\textcolor{magenta}{#1}}
-
-
+\newcommand{\callsE}{\ensuremath{\mathit{calls_C^{R}}}\xspace}% from Executions
+\newcommand{\callsD}{\ensuremath{\mathit{calls_C^{S}}}\xspace}%  from Detection
+\newcommand{\compsE}{\ensuremath{\mathit{comps_C^{R}}}\xspace}% from Executions
+\newcommand{\compsD}{\ensuremath{\mathit{comps_C^{S}}}\xspace}%  from Detection
 %\begin{frontmatter}
 
 \begin{document}
 
-\title{On detecting over-eager concurrency  in  asynchronously communicating  concurrent objects%
+\title{On Detecting Over-Eager Concurrency  \\
+       in  Asynchronously Communicating  \\
+       Concurrent Object Systems%
 \thanks{This work was done in the context of the EU projects
    FP7-610582  \emph{Envisage: Engineering Virtualized Services}
     (\texttt{http://www.envisage-project.eu}) and
@@ -55,23 +62,324 @@ Parallelism through Type-based Optimizations}
 \lstset{emph={awk}, emphstyle=\textbf}
 
 \section{Introduction}
-Here ... flushing cycles
 
+
+Today, concurrency is a key aspect of the computer systems forming our
+infra-structure. It is essential in distributed systems and net-based
+service systems such as cloud computing, %, but also in multi-core systems
+%applications.  
+as well as % in % and also in %order to exploit 
+multi-core computers.
+\OO{Since  it is easier to reduce parallelism} than to increase the amount
+of parallelism, 
+it is a non-trivial 
+challenge to design systems that 
+allow %exhibit %exploit %work with
+the desired amount of concurrency --  and in a correct manner.  In
+practice many systems rely on centralized control or
+synchronization of blocks of code to
+make programs dealing with shared data work correctly, including
+thread-based object-oriented concurrency, which is %form %are
+the most common paradigm used to program distributed systems today.  
+However, synchronization restricts parallelism
+and slows down overall performance.  
+%\sout{The thread-based concurrent model suffers from this.}
+While synchronization 
+primitives for notification/signaling may improve efficiency, they 
+%Thread-based object-oriented concurrent programs suffers from this, and 
+%in addition the synchronization primitives based on waiting and notification 
+are difficult to use correctly because they break modular reasoning and
+understanding.
+
+The actor model has been acknowledged as a natural way of programming
+concurrent systems, and is based on a simple semantics allowing
+modular reasoning \cite{Hewitt77,Agha86,DAghaT04,218170}.  It has been
+extended to the object-oriented setting in the form of active
+concurrent objects, interacting by means of remote method calls.
+Asynchronous methods increase efficiency by allowing non-blocking calls;
+and shared futures enable even more efficient interaction, allowing
+objects to share computation results without waiting for the results
+\cite{Yonezawa86,Halstead85,liskov88pldi}. For instance a caller who
+does not need the result of the called method may pass the future
+identity of the result to other objects without (itself) waiting for the
+result to appear.
+
+Inter-object concurrency comes for free in the sense that each object
+can run concurrently with other objects.  Intra-object synchronization
+is handled in a modular manner without the use of external notification.
+The concurrency model allows unrestricted concurrency with a
+compositional semantics. Thus it enables %simplifies
+efficient programming, class-wise understanding, verification, and testing.
+However, this unrestricted concurrency model
+does not come without a price.  This
+programming style may give rise to deadlocks, and it is easy
+%  Although not unique to programs created using Creol style synchronization,
+% this programming style does make it quite easy 
+to create programs that are class-wise semantically
+correct but that fail due to over-eager creation of %suspended 
+method calls. A system may feed an object with more calls than it is
+able to handle, regardless of its processing speed.  We refer to this
+situation as \emph{flooding} of the object.
+
+While analysis of deadlock situations for this concurrency model has
+been investigated in several ways, we are not aware of analysis of
+object flooding for this concurrency model. In this paper we define
+and exemplify the concept of flooding, distinguishing between strong
+and weak flooding.  The scientific contribution of the paper is to
+propose a static analysis method to detect possible flooding
+situations, and prove its soundness (no false negatives).  Since 
+static analysis of flooding cannot be both sound and complete,
+detection of flooding may not imply a real flooding situation.
+However, when no flooding is detected, this
+%on of no flooding
+ implies that there are no real flooding situations (soundness).
+
+Something on related topics, like process management and process balancing...
+data race detection.
+
+We ignore flooding caused by direct recursion,
+since this is not considered a concurrency problem.
+
+\begin{figure}[t!]
+$$
+%
+  \begin{array}{lrl@{\hspace{1em}}l} 
+    \ifdecl & \bnfdef & 
+    \kw{interface}\ I\ \bnfoptional{\kw{extends}\ \bnfplus{I}}^? 
+%    \{\many{M_s}\} 
+    \{S^*\} 
+    & 
+    \text{interface declaration} 
+    \\ 
+    \cldecl & \bnfdef & \kw{class}\ C([\cpofT]^*
+    )\
+    \bnfoptional{\kw{implements}\ \bnfplus{I}}\ \\ & & 
+  \{[\wofT  \ [:=e]^?]^*
+    \
+    \bnfoptional{
+    s
+    %\CD{\{w := \new \ C(\elist{e})\}}
+    }^?\
+    %\many{M}
+    M^*
+\}&   \text{class definition} 
+    \\  
+%%%%      
+%    \cldecl & \bnfdef & \kw{class}\ C([\cpofT]^*)\
+%	%\bnfoptional{
+%	\kw{implements}\ \bnfplus{I}
+%	%}
+%	\    
+%    \{[\wofT \ [:=e]^?]^*\ M^*\}
+%    &   \text{class definition} 
+%    \\ 
+%    M & \bnfdef & T\ m ([\xofT]^*)\ \{ [\kw{var}\ [\xofT]^*]^?\ s\;;\ \RETURN \ e\}
+%    & \text{method definition} 
+%    \\
+    M & \bnfdef & 
+    S\ B
+	& \text{method definition} 
+    \\
+    S & \bnfdef & T\ m ([\xofT]^*
+    )&  \text{method signature} 
+    \\ 
+    B & \bnfdef & \{[\kw{var}\ [\xofT \ [:=e]^?]^*;]^?% \many{\xofT}
+    \ [s;]^?\ \PUT \ e\} & \text{method blocks} \\    
+    T & \bnfdef & I %C
+ \bnfbar \Int \bnfbar \Bool \bnfbar \String \bnfbar \Void \bnfbar \Fut{T}
+    &  \text{types} \\
+    v & \bnfdef & x \bnfbar w 
+    & \text{variables (local or field)} 
+    \\ 
+    e & \bnfdef &  \kw{null} \bnfbar \this\ 
+    \bnfbar v  \bnfbar cp  \bnfbar f(\elist{e}) &
+    \text{pure expressions} 
+    \\ 
+    s & \bnfdef  & 
+     v := e \bnfbar 
+     v := v!m(\elist{e})  \bnfbar 
+     v := [v.]^? m(\elist{e})         & \text{statements} 
+ \\ &&  
+    \bnfbar  [\AWAIT]^?   v := \GET \ e  \bnfbar \AWAIT\ e 
+ \\ &&
+    \bnfbar \kw{if}\ e\ \kw{then} \ s\ [\kw{else}\ s]^? \ \kw{fi} 
+    \\ &&
+    \bnfbar v := \new \ C(\elist{e})
+    \bnfbar  \kw{skip} \bnfbar s;s  
+\\
+\end{array}
+$$
+\caption{\label{fig-creol} Core language syntax, with $C$ class name,
+  \cp formal class parameter, $m$ method name, $w$ fields, $x$ method
+  parameter or local variable, and where $\frv$ is a future variable.
+  We let $[~]^*$, $[~]^+$ and $[~]^?$ denote repeated, repeated at least
+  once and optional parts, 
+  respectively, and $\elist{e}$ is a (possibly empty) expression list.
+  Expressions $e$ and functions $f$ are side-effect free.}
+\end{figure}
+
+
+
+\section{A core language}
+
+We consider a minimal core language inspired by Creol and its
+successor ABS
+\cite{Johnsen04b,johnsen07sosym,Johnsen05d,HATS1.2}. %Johnsen04e,
+The Creol language
+exploits the paradigm of concurrent, object-oriented,  active objects
+using remote method call and  asynchronous method calls as the interaction
+mechanism, adding support for non-blocking method calls to avoid
+unnecessary waiting.  Shared-variables as well as 
+ thread-based notification are
+%replaced by a
+avoided, introducing a
+release mechanism, allowing an object to perform other tasks while
+waiting for a condition to become true or for a method result to
+appear.  Local data structures are captured by abstract data types
+rather than (concurrent) objects.
+% Modular semantics and modular understanding and reasoning are
+% possible, and thus an object can be tested in isolation since its
+% semantics is not changed by its environment.  
+The resulting paradigm has a compositional semantics  and supports
+modular reasoning and understanding of classes, and thus an object can
+be tested in isolation since its semantics are not changed by its
+environment \cite{Johnsen08,Din12jlap,din12sefm}.
+\ignore{
 Creol (and others) have suggested the use of concurrent objects
 communicating via asynchronous method calls and futures, as a pathway
-to better reasoning about concurrent systems. The communication and
+to better reasoning about concurrent systems. 
+
+The communication and
 synchronization model of Creol simplifies deadlock detection, allows
 for ...
 
-These advantages do not come without a price.  Although not unique to
+However, these advantages do not come without a price.  Although not unique to
 programs created using Creol style synchronization, this programming
 style does make it quite easy to create programs that are semantically
 correct but that fail due to over eager creation of suspended method
-calls.
+calls.}
 
 
-We ignore flooding caused by direct recursion,
-since this is not considered a cuncurrency problem.
+%The syntax of our core language is given in figure \ref{fig-creol}.
+
+
+The core language presented in figure \ref{fig-creol}
+includes standard
+statements for assignment, \kw{skip}, conditionals, and sequential
+composition.  We use a Java-like syntax, but use := for assignments.
+%to not confuse 
+%basic statements for first-class futures.
+Methods are organized in interfaces and classes in a
+standard manner.  A class $C$ takes a list of formal  parameters
+$\classpar$, and defines fields $\Att$, optional initialization statements $\elist{s}$, and methods $\many{M}$.  
+There is read-only access to 
+%class parameters $\classpar$,
+% method parameters $\many{x}$, and implicit variables, such as
+ \this, referring to the current object, as well as %and 
+the implicit method parameter \destiny, referring  to the future of the call
+of the current method.
+A method definition has the form $m (\elist{x})\{\kw{var }\elist{y};\
+s;\ \PUT\ e\}$, when ignoring type information, where $\elist{x}$ is
+the list of formal parameters, $\elist{y}$ is an optional list of
+\emph{method-local variables}, $s$ is a sequence of statements, and
+the final 
+\emph{put} statement writes
+the value of $e$ %s put 
+in the future of the call, ``resolving the future''.
+%
+A future variable $\frv$  declared by $\Fut{\im{T}} \frv$  may refer to
+%ndicating that $\frv$ may refer to 
+futures  containing values  of type
+$T$. The call statement $\frv := x!m(\elist{e})$ invokes the method $m$ on
+object $x$ with input values $\elist{e}$.  The identity of the
+generated future is assigned to $\frv$, and the calling process
+continues execution without waiting for $\frv$ to become resolved.  The
+query statement $v :=  \GET\ \frv$ is used to fetch the value of a
+future. This statement blocks until $\frv$ is resolved, and then 
+assigns the value contained in $\frv$ to $v$. 
+
+The non-blocking release statement $\AWAIT \ v := \GET\ \frv$ suspends
+the current process as long as $\frv$ is not resolved,
+allowing other (enabled) process of the object to continue.
+This gives rise to more efficient programming with futures.
+Similarly, the statement
+$\AWAIT \ c$ %, where $c$ is a 
+suspends the current process as long as the Boolean condition $c$ is
+not satisfied.
+%
+The remote call $v :=  x.m(\elist{e})$ blocks while waiting for
+the future of the call to be resolved, and may be seen as a 
+shorthand for  $\frv := x!m(\elist{e}); v :=  \GET\ \frv$ 
+for a fresh $\frv$.
+%Similarly 
+The construct for local calls, $v:=m(\many{e})$,
+employs a standard stack-based execution.
+
+\ignore{
+The non-blocking release statements,
+$\AWAIT \ c$, where $c$ is a Boolean condition, and
+%$\RELEASE$, 
+$\AWAIT \ v :=  \GET\ \frv$, 
+ release the  current process
+%to be able to release the current process.
+ as long as 
+the condition is not satisfied or 
+$\frv$ is not  resolved, respectively.
+This gives rise to more efficient programming with futures.}
+
+
+\ignore{Further statements for process control include a non-blocking
+statement
+$\AWAIT \ c$, where $c$ is a Boolean condition, and
+%$\RELEASE$, 
+$\AWAIT \ v :=  \GET\ \frv$, 
+which releases the  current process
+%to be able to release the current process.
+ as long as $\frv$ is not yet resolved. 
+This gives rise to more efficient programming with futures.}
+%So a more flexible way to query a future will be $\RELEASE; v := \frvq$. 
+%The discussion about process releasing statements can be found in
+%\cite{din12jlap}. 
+%we show how process release statements, including a 
+%releasing query statement
+% It is possible to add a treatment of 
+% %the discussion about 
+% process release statements 
+% as a straight forward extension of the present work,
+% see section 
+%following the approach of \cite{din12jlap}.
+%without inte violating the other part of the paper.
+% where the issues related to futures are the main concern. 
+%However, %we choose to focus on a  general  set of \ABS 
+%
+Object variables are typed by interfaces, 
+and remote field access is (syntactically) forbidden.
+We assume that call and query statements are
+well-typed.  
+\ignore{If $x$ refers to an object where $m$ is defined with 
+input types $\many{S}$
+% no input values 
+and return type $T$, the following code is well-typed
+when $\many{e}$ is of type  $\many{S}$:
+$\Fut{T} \frv;\ T\ v;\ \frv:=x!m(\many{e});\ v:=\frvq$,
+which represents 
+a traditional synchronous and blocking method call.
+This call is abbreviated by the notation $$v:=x.m(\many{e})$$
+%In the example below
+%We use the notation $$v:=x.m()$$ to abbreviate this call.
+Note that the call $v:=\this.m(\many{e})$ will block,
+and thus a construct for local calls, say  $v:=m(\many{e})$,
+would be useful.}
+% Class instances are concurrent, encapsulating their own state and
+% processor.  Each method invoked on the object leads to a new process,
+% and at most one process is executing on an object at a time.  Object
+% communication is \emph{asynchronous}, as there is no explicit transfer
+% of control between the caller and the callee. 
+We here ignore inheritance since it
+does not influence our discussion on flooding.
+
+
+
 \section{Flooding Cycles}
 
 As a motivating example we will
@@ -89,7 +397,7 @@ The service object is using a number of proxies to
 handle all the clients and is using  an underlying news producer
 to obtain news. The service object is using futures to avoid
 being delayed by waiting for news to be available,
-thus it may continously respond to clients.
+thus it may continuously respond to clients.
 The  interfaces of these units are given 
 in figure \ref{example-subscr-interfaces}.
 
@@ -143,7 +451,7 @@ class Proxy(Intlimit,ServiceIs) implements ProxyI{
     put lastProxy}
   Void publish(Fut<News>fut){
     var News ns=None;
-    ns =fut.get; myClients!signal(ns);
+    ns =get fut; myClients!signal(ns);
     if nextProxy==null then s!produce() else nextProxy!publish(fut) fi}}
 
 class Producer(NewsProducerI np) implements ProducerI{
@@ -170,8 +478,8 @@ A simple subscription example.}
 
 Modifying Client and Proxy as shown in figure \ref{example-subscr-flooding}, results in a program that will flood the system with suspended calls. 
 The changes are at lines 9 and 14 in the revised code.
-The change is to shift requiring the actual news to have arrived from the Proxy (\lstinline{ns=fut.get; myClients!signal(ns);})
-to the Client (\lstinline{news:=fut.get}).
+The change is to shift requiring the actual news to have arrived from the Proxy (\lstinline{ns=get fut; myClients!signal(ns);})
+to the Client (\lstinline{news:=get fut}).
 
 
 \begin{figure}
@@ -190,7 +498,7 @@ class Proxy(Intlimit,ServiceIs) implements ProxyI{
 
 class Client implements ClientI{
   News news:=None;
-  Void signal(Fut<News> fut){news:=fut.get}}
+  Void signal(Fut<News> fut){news:=get fut}}
 
 \end{abs}
 \caption{\label{example-subscr-flooding}
@@ -229,7 +537,7 @@ execution of the code along the path of the cycle, such a cycle can create an un
 
 We call such sequences flooding-cycles. In this paper we present an algorithm to statically identify
 programs that contain flooding-cycles. This approach is conservative in that if it reports that a program is free from
-flooding-cycles then it is indeed free of such cylces, however, it may report flooding-cycles that are in fact bounded by
+flooding-cycles then it is indeed free of such cycles, however, it may report flooding-cycles that are in fact bounded by
 program logic, not amenable to static analysis. It will also report flooding-cycles that do not in practice produce an
 increasing number of unprocessed calls due to the execution speed of the flooding-cycle. 
 
@@ -260,7 +568,7 @@ is a flooding cycle that is racing against both the
 \lstinline{Client.signal} calls and also against the
 \lstinline{Producer.detectNews} calls.  This is because rather than
 wait in \lstinline{Proxy.publish} for the news to actually be produced
-as in the first version (\lstinline{ns=fut.get;}),
+as in the first version (\lstinline{ns=get fut;}),
 \lstinline{Proxy.publish} instead simply passes the future out to
 another asynchronous call (\lstinline{myClients!signal(fut);}),
 eliminating any progress coordination between cycle A and the
@@ -272,21 +580,24 @@ growing to system limits.
 
 \section{Identifying Flooding Cycles}
 
-\begin{definition}
-\label{flooding-cycle}
-A \emph{flooding-cycle} is an execution cycle 
+\begin{definition}[Flooding Cycle]\label{flooding-cycle}
+A \emph{flooding cycle} is an execution cycle 
 containing a call statement
 %involving one or more asynchronous calls
 %such that for at least one of those calls,  call it $o.m()$ occurring
  at a given program location, such that 
-this statement may produce an unbounded number of  method calls  
-before any of them %invocation of  $o.m()$
- has been completed.
+this statement may produce, directly or indirectly, an unbounded number of 
+uncompleted
+calls to a specific method.
+%such that also an unbounded number of those calls are not completed.
+%before any of those calls  has been completed.%
+\ignore{COMMENT: well some might complete, as long as the number of uncompleted
+ones is also unbounded.}
 \end{definition}%
 
 Flooding of this kind may depend on the relative
 speed of different objects, and  may be difficult to detect even
-by testing of complete systems, due to their inherent
+when testing complete systems, due to their inherent
 non-deterministic nature.  They may show up for instance at times when
 the system load is high.
 
@@ -300,7 +611,7 @@ We call such flooding \emph{strong flooding}.
 
 \ignore{
 %\section{Definition of Strong Flooding Cycles} %p
-\begin{definition}
+\begin{definition}[Strong Flooding Cycle]
 \label{strong-flooding-cycle}
 A \emph{strong flooding-cycle} is an execution cycle 
 involving one or more asynchronous calls
@@ -312,10 +623,10 @@ even with fair scheduling between concurrent units and
 \end{definition}}
 
 The top-level view of an algorithm to detect flooding-cycles is shown in figure \ref{flow-analysis}.
-We first create a control flow graph for each method where the nodes are method start nodes, method calls, \emph{get} statements, 
+We first create a control flow graph (cfg) for each method where the nodes are method start nodes, method calls, \emph{get} statements, 
 \emph{await} statements,
-or \emph{put} statements (including implicit \emph{put} statements at the end of Void methods)\footnote{
-Synchronous method calls will be represented as an asyncrhonous method call followed immediately by a \emph{get}.}.
+or \emph{put} statements (including implicit \emph{put} statements at the end of Void methods). %\footnote
+Synchronous method calls will be represented as an asynchronous method call followed immediately by a \emph{get}.
 All other statements are ignored. 
 %In addition, the nodes are of two types,
 %synchronous, or asynchronous. Synchronous nodes are \emph{get} statements or \emph{await} statements.
@@ -323,7 +634,7 @@ All other statements are ignored.
 \begin{figure}
 \begin{shaded}
 \begin{enumerate}
-\item Build the individual control flow graphs for each method including a start node, and a node for each call, \emph{get}, \emph{await}, 
+\item Build the individual control flow graphs for each method including a start node, and a node for each \emph{call}, \emph{get}, \emph{await}, 
 and \emph{put} statements.
 \item Add call edges from call nodes to the start node of a copy of the corresponding method cfg, unless the call is recursive, in which case
 create a call edge to the existing start node. Assign each call node a unique label.
@@ -336,8 +647,8 @@ where there are multiple \emph{put}s that might reach a given \emph{get}?)
 Top Level Algorithm for Detecting Flooding-Cycles}
 \end{figure}
 
-In step 2 we connect the cfgs for each method with call edges expanding all non-recursive calls so that we can
-associate a specific call with a specific get/put. Note that we do not distinguish between multiple calls to the same method in one
+In step 2 we connect the cfgs for each method with call edges, replicating the method's cfg for each non-recursive call so that we can
+associate a specific call with a specific start/get/put. Note that we do not distinguish between multiple calls to the same method in one
 object, and one call to a particular method in each of multiple instances of the same class. 
 \footnote{Seems like maybe a place for a lemma that asserts that doing so won't result in false negatives.}
 
@@ -349,41 +660,58 @@ there is no flooding when the algorithm finds none,
 we must ensure that a ``get'' actually waits for the future
 (``must instead of ``might'').}
 
-In step 5 we apply the algorithms in figures \ref{reachable-analysis} and  \ref{call-comps-analysis} to identify any flooding cycles.
+In step 5 we apply the algorithm in figure \ref{reachable-analysis} to identify any flooding cycles.
 If there is a cycle that creates futures (including implicit Void futures for trivial calls) that are not read
 in the cycle\footnote{Not really in the cycle, but in the reachable nodes starting from the cycle}, 
 then there is a flooding-cycle with respect to the call that produced the unread future. 
-(I guess this is where we introduce a theorem.)
+%(I guess this is where we introduce a theorem.)
+
+
+\begin{figure}
+\begin{shaded}
+\begin{enumerate}
+\item Starting with the graph $G$ from step 4 in figure \ref{flow-analysis}, mark all nodes \emph{not reachable}.
+\item \label{recompute} Starting with the entry point to the cycle, do a depth-first traversal of $G$ and apply definitions
+\ref{defn-sreachable} and \ref{defn-wreachable} to mark nodes as \emph{strongly-reachable}, \emph{weakly-reachable}, or neither.
+\item Apply definitions \ref{defn-calls} and \ref{defn-comps} to compute the $calls$ and $comps$ sets.
+\item If the previous two steps results in any changes to \emph{strongly-reachable}, \emph{weakly-reachable}, $calls$, or $comps$, 
+go to step \ref{recompute}.
+\end{enumerate}
+\end{shaded}
+\caption{\label{reachable-analysis}
+Algorithm to compute the \emph{reachable} nodes in a graph relative to a given cycle.}
+\end{figure}
 
 %=======================================================
-\subsection{Computing the call and comp sets (step 6)}
-
-\textbf{Assumptions:}
-
-\begin{itemize}
-\item
-The calls in the graph are labeled, 
-say numbered by their textual occurrence in the (sub)program.
-\item
+\subsection{Computing the call and comp sets (step 5)}
  We consider one cycle (at a time),
 ignoring any external call initiating the cycle.
+
+\noindent\textbf{Assumptions:}
+
+\begin{itemize}
+%\item
+
 %\item
 %If the same method is called several times from within the cycle,
 %we include a copy of its body for each call.
 %Thus each copy of a  method body has  at most  one caller from within the cycle.
 \item
 We assume a finite graph (even after expansion).
+\item
+The calls in the graph are labeled, 
+say numbered by their textual occurrence in the (sub)program.
 \item 
-A \emph{put} node in a copy of a method body, is marked with the same label $n$ as the label of the
-caller, marking that the call is completed. Because of graph expansion, this call will be unique except
-in the case of a recursive call. In that case, the label is the non-recursive call label except when
-the cycle being considered includes the recursive call edge, in which case the put gets the label of the recursive call.
+\Blue{Every method begins with a \emph{start} node and ends with a \emph{put} node, and those two nodes
+will have the same label as the caller. Because of graph expansion, the caller will be unique except
+in the case of a recursive call. In that case, the label is the label of the non-recursive caller except when
+the cycle being considered includes the recursive call edge.
+When the recursive call edge is part of the cycle the label will be that of the recursive caller.}
 \item
-We assume each \emph{get}  node can be traced back to a unique put. 
-We mark each \emph{get} node with the same label as the put (see previous bullet).
-%Note, in this analysis other parts of the program graph may be needed!
+\Blue{We mark each \emph{get} node with the set of labels corresponding to any \emph{call} nodes that may have
+generated the future that reaches the \emph{get}.}
 \item
-Blocking calls are split into an async call $n$ and a (matching) \emph{get}
+Blocking calls are split into an asynchronous call $n$ and a (matching) \emph{get}
 marked with  $n$.
 \item
 We treat blocking self-calls specially,
@@ -391,134 +719,128 @@ by not including an edge from the call node to the get node,
 but instead  in-lining  the copy of the method
  (with an arrow to its
 start node, and an arrow from each  \emph{put} node
-back to the next statement).
+back to the next statement). \Blue{Why do we need this?}
 \item We treat \emph{await(future)} the same as a \emph{get}.
 \item
 Boolean \emph{await} statements are represented as nodes in the graph
 (since they may affect method completion). They are assumed to never block when in a cycle and to
-always block when not in a cycle. (See flow-reachable.)
+always block when not in a cycle.
 
 \end{itemize}
 \textbf{Analysis:}
 The analysis considers one cycle (at a time)
 together with surrounding parts of the program graph.
+The analysis computes two sets; the set of calls that could possibly have occurred during 
+the cycle or outside of the cycle when \emph{reachable} from the cycle without suspensions or blocking,
+and the set of calls that must have completed during
+the cycle or outside of the cycle when \emph{reachable} from the cycle without suspensions or blocking.
+These sets are denoted $calls$ and $comps$, respectively. An algorithm to compute those sets is shown in
+figure \ref{reachable-analysis}.
+
+\ignore{
+The analysis considers one cycle (at a time)
+together with surrounding parts of the program graph.
 The analysis will collect sets of calls $n$ from the cycle and call completions,
 in  the cycle, or even outside  the cycle when \emph{reachable} from the cycle without suspensions or blocking,
 or  when a predecessor of  a \emph{get} is related to a call in the cycle (NOTE: I don't know what this means.).
-The analysis, uses two sets, denoted $calls$ and $comps$. We first must compute the reachable nodes (definition \ref{defn-reachable})
-as shown in figure \ref{reachable-analysis}.
-An algorithm to compute the calls (definition \ref{defn-calls}) and comps (definition \ref{defn-comps}) 
-for a graph of \emph{reachable} nodes is shown in figure \ref{call-comps-analysis}.
+The analysis, uses two sets, denoted $calls$ and $comps$. An algorithm to compute those sets is shown in
+figure \ref{reachable-analysis}.
+}
 
-\begin{definition}
+\begin{definition}[Program Graph]\label{def-program-graph}
+A \emph{program-graph} $G$ is a graph comprised of \emph{start}, \emph{call}, \emph{get}, \emph{await}, and \emph{put} nodes,
+and \emph{flow}, \emph{call}, and \emph{future} edges, constructed according to steps 1, 2, and 4 of figure \ref{flow-analysis}.
+\end{definition}
+
+\begin{definition}[Flow Reachable]\label{def-flow-reachable}
 Node $N_j$ is \emph{flow-reachable} from $N_i$ if there is a flow-edge $N_i \rightarrow N_j$. 
 \end{definition}
 
-\begin{definition}
+\begin{definition}[Flow Path]\label{def-flow-path}
 A \emph{flow-path} is a path made up of only flow-edges.
 \end{definition}
 
-\begin{definition}
-\label{defn-reachable}
-Node $N_i$ is \emph{reachable} wrt cycle $C$ in graph $G$ if
-\begin{itemize}
-\item $N_i \in C$, or
-\item $N_i$ is not a \emph{get} node, $N_i$ is flow-reachable from $N_j$, $N_j$ is \emph{reachable}, and $\not\exists e = N_j \rightarrow N_k$ where $e$ is a flow-edge $\in C$, or
-\item $N_i$ is a \emph{get} node, all predecessors of $N_i$ are \emph{reachable}, $\forall N_j$, a predecessor of $N_i$
-$\not\exists e = N_j \rightarrow N_k$ where $e$ is a flow-edge $\in C$, or
-\item $n \in {comps}$, $N_i$ is a start node with label $n$, $\exists$ a call edge $N_j \rightarrow N_i$, and $N_j$ is \emph{reachable} or
+\begin{definition}[Strongly Reachable]\label{defn-sreachable}
+Node $N_j$ is \emph{strongly-reachable} with respect to cycle $C$ in graph $G$ if
+\begin{enumerate}
+\item \label{sr-incycle} $N_j \in C$, or
+\item $N_j$ is not a \emph{get} node \Blue{or a boolean \emph{await} node}, $N_j$ is flow-reachable from $N_i$, $N_i$ is \emph{strongly-reachable}, and 
+no other node $N_k$ is flow-reachable from $N_i$, or
+% next rule used in EX14 (quasi example 2)
+\item $N_j$ is a \emph{get} node with label set $s$, containing just one label, $n$;
+the \emph{put} node with label $n$ is \emph{strongly-reachable};
+$N_j$ is flow-reachable from $N_i$; $N_i$ is \emph{strongly-reachable};
+and no other node $N_k$ is flow-reachable from $N_i$; or
+\item \label{sr-start} $n \in {comps}$, $N_j$ is a start node with label $n$, $\exists$ a call edge $N_i \rightarrow N_j$, and $N_i$ is \emph{strongly-reachable} or
 
 %possible additions
-\item $N_i$ is a \emph{put} node, $N_j$ is a \emph{reachable} \emph{get} node and $N_i \rightarrow N_j$ is in $G$. %first metion of G?
-\item $N_j$ is flow-reachable from $N_i$, $N_j$ is not flow-reachable from any  $N_k$ $i \not = k$, and $N_j$ is \emph{reachable}.
+\item $N_j$ is a \emph{put} node with label $n$,
+$N_k$ is a \emph{strongly-reachable} \emph{get} node with a label set containing $n$, and the node $call_n$ is \emph{strongly-reachable}.
 
-
-\end{itemize}
+\item $N_k$ is flow-reachable from $N_j$, $N_k$ is not flow-reachable from any  $N_i$ $i \not = j$, and $N_k$ is \emph{strongly-reachable}.% see Ex9
+\end{enumerate}
 \end{definition}
 
-\begin{definition}
+
+\begin{definition}[Weakly Reachable]
+\label{defn-wreachable}
+Node $N_j$ is \emph{weakly-reachable} with respect to cycle $C$ in graph $G$ if
+\begin{enumerate}
+\item $N_j$ is \emph{strongly-reachable}, or
+\item \label{wr-start} $N_i$ is a \Blue{\emph{weakly-reachable}} start node and there is a flow-path from $N_i$ to $N_j$, or
+%\item \sout{$N_i \rightarrow N_k$ is a call edge in $C$ and there is a flow-path from $N_i$ to $N_j$.}
+
+\item\label{wr-calledge} 
+\sout{$n \in {comps}$,} $N_j$ is a start node \sout{with label $n$}, $\exists$ a call edge $N_i \rightarrow N_j$, and $N_i$ is \emph{weakly-reachable} or
+
+\item \sout{$N_j$ is a \emph{put} node with label $n$,
+$N_k$ is a 
+\emph{weakly-reachable} \Blue{(or should that be \emph{strongly-reachable})}
+\emph{get} node with label $n$, and the node $call_n$ is \emph{weakly-reachable}.}
+
+
+%\item $N_j$ is not a \emph{get} node, $N_j$ is flow-reachable from $N_i$, $N_i$ is \emph{weakly-reachable}, and 
+%there is no node $N_k$ in $C$ that is flow-reachable from $N_i$, or % don't follow other flow edges for flow edges in the cycle
+%\item $N_j$ is a \emph{get} node, all flow-predecessors of $N_j$ are \emph{weakly-reachable}. % no requirement on the put predecessors
+
+\end{enumerate}
+\end{definition}
+
+\begin{definition}[Weakly Reachable Calls]
 \label{defn-calls}
-For cycle $C$, \emph{calls(C)} is the set of labels of all \emph{reachable} call-nodes in $C$.
+For cycle $C$, \callsD %\emph{calls(C)} 
+is the set of labels of all \emph{weakly-reachable} call-nodes in $C$.
 \end{definition}
 
-\begin{definition}
+\begin{definition}[Strongly Reachable Completions]
 \label{defn-comps}
-For cycle $C$, \emph{comps(C)} is the set of labels ${n}$ such that 
+For cycle $C$, \compsD %\emph{comps(C)}
+ is the set of labels ${n}$ such that 
 \begin{itemize}
-\item ${n}$ is the label for a \emph{put} node in $C$, or
-\item ${n}$ is the label for a \emph{get} node in $C$, or 
-\item $N_i$ is a \emph{call} node and the head of a call-edge in $C$, all nodes along every flow-path from $N_i$ to a \emph{put} are \emph{reachable},
-none of those nodes are boolean \emph{await} nodes, and $n$ is the label of those \emph{put} nodes, or
-%The only way for a start node to become reachable is for n to already be in comps.
-\item \sout{$N_i$ is a \emph{reachable} start node not in $C$, and all flow-paths from $N_i$ reach a \emph{put}.}
+\item ${n}$ is the label for a \emph{put} node that is \emph{strongly-reachable}, or
+\item ${n}$ \Blue{is a member of the set of labels} for a \emph{get} node that is \emph{strongly-reachable}, or 
+\item $N_i$ is a \emph{call} node and the head of a call-edge in $C$; 
+for every node $N_j$ on a flow-path from $N_i$ to a \emph{put} node,
+$N_j$ is not a Boolean \emph{await} node, if $N_j$ is a \emph{get} node then $N_j$ is \emph{strongly-reachable}; 
+and $n$ is the label of those \emph{put} nodes.
+%Note - I dropped the requirement that the nodes on the paths be WR because that is implied because start_n must be in the cycle making
+% it SR and by WR.2 all of the nodes in question will be at least WR.
 \end{itemize}
-
 \end{definition}
 
 
 
-\begin{theorem}
-The cycle is \emph{flooding wrt a call} $n$ if 
-$n\in (calls -comps)$.
+\begin{theorem}[Flooding with respect to Cycle]
+\label{thm-flooding}
+If $call_n$ is \emph{flooding} with respect to cycle $C$ then 
+flooding is detected by our algorithm, i.e., $n\in (\callsD -\compsD)$.
 \end{theorem}
 
-
-\begin{figure}[h]
-%Example
-\begin{abs}
-Void cycle()      {1:m(); get$_1$; 2:cycle(); put}
-Void m()$\ \ \ \ ${3:n(myfuture); put}
-Void n(Future f)  {4:p; get$_4$; get$_f$; put}
-\end{abs}
-\caption{\label{example-quasi}
-A  quasi example to illustrate/test page 9.
-Here calls are already labeled and gets are indexed with
-a label or future variable. \emph{myfuture} denotes the
-future of the current call. The cycle should flood 3 calls.}
-\end{figure}
-
-
-
-\begin{figure}[h]
-%Example
-\begin{abs}
-Void cycle()      {f:=1:m(); 2:n(f); get$_1$; Put}
-Void m()$\ \ \ \ ${...}
-Void n(Future f)  {get$_f$; 3: cycle(); put}
-\end{abs}
-\caption{\label{example-quasi2}
-  Quasi example 2.
-(As before calls are  labeled and gets are indexed with
-a label or future variable.) 
-%
-Here there should be no real flooding since method
- \emph{cycle} will reach  \emph{put} since call 1 must be completed
-due to the   \emph{get} in  \emph{n}.
-CALLS: 1,2,3.  
-COMPS: 1,2 and also 3 if we put back the (off-cycle)  flow edge into 
- $get_1$.
-Without putting it back we do not reach \emph{put} of \emph{cycle}.
-}
-\end{figure}
-
-
-\begin{figure}[h]
-%Example
-\begin{abs}
-Void cycle(f)      {1:m(f); get$_1$; 2:cycle(f); Put}
-Void m(Future f)  {if (bExpr) {get$_f$; 3: n();}  put}
-\end{abs}
-\caption{\label{example-quasi3}
-  Quasi example 3.
-%
-$n$ could be flooded if bExpr is true, but currently we don't mark the call to $n$ as reachable.
-}
-\end{figure}
 
 \subsection{Applying the Algorithm to the example program}
 
 
-\begin{figure}[t]
+\begin{figure}[t!]
 \includegraphics[width=15cm]{graphOrig}
 \caption{\label{graph-orig}
 The graph and call/comp sets for the original version of the program (figure \ref{example-subscr}).
@@ -538,20 +860,24 @@ for the two versions of the producer consumer problem above. To conserve space, 
 first letter of the class and the first letter of the method except that we use X for the class Proxy to further disambiguate it from Producer. 
 For example, Producer.detectNews is Pd and Proxy.publish is written Xp.
 
-In figure \ref{graph-orig} we see that after removing the flow-edges into the \emph{get} nodes, there is just one cycle.
-The call to Client.signal (Cs) is being flooded by this cycle.
-In practice this does not produce a flood because in this implementation, the amount of work required by the
+In figure \ref{graph-orig} we see there are two cycles involving only flow-edges and call-edges.
+The call to Client.signal (Cs) is being flooded by both cycles.
+This does not produce an actual flood because the amount of work required by the
 Client to complete a signal call is trivial and thus the Client objects easily keep up with the calls. 
-Also, the rate of execution for the cycle is
+Also, the rate of execution for cycle A is
 limited by the actual arrival of news items from the NewsProducer (\lstinline{await requests /= Nil;}), 
-which further limits the rate at which this cycle generates asynchronous calls to
-CLient.signal. (Is this an example of weak flooding?)
+which further limits the rate at which this cycle generates asynchronous calls to CLient.signal.
+Also, although not observed by our algorithm, cycle B is in fact finite, as it walks down the chain of Proxies.
+We call this \emph{weak flooding}, i.e. flooding that is harmless, given underlying fairness of concurrent objects and
+fair scheduling of tasks within an object.
 
-In the modified version of the program as reflected in figure \ref{graph-modified} there is an additional flood between cycle A and
-Pd (Producer.detectNews). This flooding-cycle is serious, and in practice will flood the system almost immediately.
+In the modified version of the program as reflected in figure \ref{graph-modified} there is an additional flood of
+Pd (Producer.detectNews) by both cycles. This flooding-cycle is serious, and in practice will flood the system almost immediately.
 Unlike in version 1, there is no \emph{get} regulating the speed at which cycle A cycles. Furthermore, the Pd calls are dependent upon the
-arrival of news items not simply limited by processor execution speed.
+arrival of news items not simply limited by processor execution speed, as indicated by the presence of the boolean \emph{await} in Ng (News.getNews).
+We call such flooding \emph{strong-flooding}.
 
+\ignore{
 \subsection{Weak and strong flooding}
 When a cycle floods with respect to a call $o.m$,
 we say that we have \emph{strong flooding} 
@@ -566,106 +892,73 @@ and  fair scheduling of tasks within an object.
 
 The first version of the subscription example
 has weak flooding of client calls (\emph{signal}),
-whereas the second has strong flooding both wrt
+whereas the second has strong flooding both with respect to
 to client calls and  to \emph{detectNews} calls.
-
-\section{Appendix}
-
-\begin{figure}
-\begin{shaded}
-\begin{enumerate}
-\item Starting with the graph from step 4 in figure \ref{flow-analysis}, mark all nodes \emph{not reachable}.
-\item Mark all nodes in the selected cycle as \emph{reachable}. 
-\item Mark all nodes flow-reachable from a \emph{reachable} node, $N_i$, as \emph{reachable}, unless $N_i$ is a call node in the cycle and
-the cycle edge from $N_i$ is a flow edge.
-\item \label{recompute} Compute the $calls$ and $comps$ sets for the \emph{reachable} nodes.
-\item If ${n}$ is in \emph{comps} and the \emph{call} label ${n}$ is \emph{reachable} and the start node with label ${n}$ is
-\emph{not reachable}, mark the start node and all nodes flow-reachable from the start node as \emph{reachable}.
-
-\item If there is a put-get edge where the put is reachable and the get is not,
-enable any disabled flow-edges into the get. %But do not mark the get reachable at this time.
-
-\item If the previous two steps results in any changes to \emph{reachable} nodes or disabled get-edges, go to step \ref{recompute}.
-\end{enumerate}
-\end{shaded}
-\caption{\label{reachable-analysis}
-Algorithm to compute the \emph{reachable} nodes in a graph relative to a given cycle.}
-\end{figure}
-
-\begin{figure}
-\begin{shaded}
-When marking a node reachable (for the first time) assign a label according to the following:
-
-\begin{itemize}
-\item When marking a start node, give it the same label as the call leading to it.
-If there are put nodes in the deferred label queue from the method for this start, give them the same label and remove them from the queue.
-\item When marking a put node, give it the same label as the start node. If the start node does not yet have a label,
-place the put node in a queue of deferred labels.
-\item When marking a get node, give it the same label as the put node leading to it. % What if the put isn't marked? See Ex12 cycleA.
-\item When marking a call node, if the corresponding start node does not already have a label give the start node
-the same label as the call node. If there are any deferred put nodes for this start, give them the same label and remove them from the deferred queue.
-\end{itemize}
-\end{shaded}
-\caption{\label{label-analysis}
-Algorithm to add labels to \emph{start}, \emph{get}, and \emph{put} nodes in a graph, relative to a given cycle.}
-\end{figure}
-
-
-\begin{figure}
-\begin{shaded}
-\begin{enumerate}
-\item $calls$ is  the set of labels of \emph{reachable} call nodes
-\item $comps$ is the set of labels ${n}$ such that 
-\begin{itemize}
-\item ${n}$ is the label for a \emph{put} node on the cycle, or
-\item ${n}$ is the label for a \emph{get} node on the cycle, or 
-\item $N_i$ is a \emph{call} node and the head of a call-edge in the cycle, all  flow-paths from $N_i$ reach a \emph{put}, and ${n}$ is the label of those \emph{put} nodes, or
-\item $N_i$ is a \emph{reachable} start node not on the cycle, and all flow-paths from $N_i$ reach a \emph{put}.
-\end{itemize}
-\end{enumerate}
-\end{shaded}
-\caption{\label{call-comps-analysis}
-Algorithm to compute the call and comp sets for a cycle.}
-\end{figure}
-
-\ignore{
-\begin{figure}
-\begin{shaded}
-\begin{itemize}
-\item For each call $n$ in the cycle add $n$ to $calls$.
-\item For each \emph{get} node  marked   $n$ in the cycle add   $n$ to  $comps$.
-%\item For each node, $N_i$, with flow edges leaving the cycle where the cycle edge is an async call edge,%
-\item For each call edge, $N_i \rightarrow N_j$, in the cycle,
-if all flow-edge-only paths starting from $N_i$ lead to a put
-% ie not the off cycle edge in Ex2 from O.m to A.a
-%before encountering \emph{await} or \emph{get} nodes, % no need for this now because there are NO flow edges into get nodes
-then add ${n}$ to $comps$, 
-where ${n}$ is the label on the puts. % I assert all such puts should have the same label. 
-%see Ex7 for multiple paths one that reaches the put and one that does not resulting in a flood of calls to B.
-\item For each call edge, $N_i \rightarrow N_j$, in the cycle, add the label for all call nodes reachable from $N_i$ following
-only flow edges to $calls$ and add the start node of the call to $candidates$.
-\item While there exists a label ${n} \in candidates$ such that ${n} \in comps$ remove ${n}$ from $candidates$
-and all all flow-edge reacahble frm ${n}$ call node labels to $calls$.
-
-%Need to give call and start nodes the same label.
-
-\item For each put node, $P_i$, in the cycle with more than one output edge, need to follow all paths off of the cycle following
-all types of edges to the ends of the paths (note the flow edges INTO get nodes will have been removed) adding ${n}$ to $calls$ for
-each call node encountered and ${n}$ to $comps$ for each put node encountered. (Note this flow will never encounter a get except
-from a put which will have already added the appropriate value to $comps$.)
-\end{itemize}
-\end{shaded}
-\caption{\label{call-cons-analysisxx}
-Algorithm to compute the call and comp sets for a cycle.}
-\end{figure}
 }
+%\newpage
+%\newpage
+\input{proof.tex} %separate file
+%\subsection*{Further lemmas}
+%\input{charlieProof.tex}
+
 
 \bibliographystyle{abbrv}
 %\bibliographystyle{alpha} 
 \bibliography{creol,ref}
 %\bibliography{extracted}
 
+\newpage
+\section*{Appendix A}
 
+\begin{figure}[ht]
+%Example
+\begin{abs}
+Void cycle()      {1:m(); get$_1$; 2:cycle(); put}
+Void m()$\ \ \ \ ${3:n(myfuture); put}
+Void n(Future f)  {4:p; get$_4$; get$_f$; put}
+\end{abs}
+\caption{\label{example-quasi}
+A  quasi example to illustrate/test page 9.
+Here calls are already labeled and gets are indexed with
+a label or future variable. \emph{myfuture} denotes the
+future of the current call. The cycle should flood 3 calls.}
+\end{figure}
+
+\begin{figure}[h]
+%Example
+\begin{abs}
+Void cycle()      {f:=1:m(); 2:n(f); get$_1$; Put}
+Void m()$\ \ \ \ ${...}
+Void n(Future f)  {get$_f$; 3: cycle(); put}
+\end{abs}
+\caption{\label{example-quasi2}
+  Quasi example 2.
+(As before calls are  labeled and gets are indexed with
+a label or future variable.) 
+%
+Here there should be no real flooding since method
+ \emph{cycle} will reach  \emph{put} since call 1 must be completed
+due to the   \emph{get} in  \emph{n}.
+CALLS: 1,2,3.  
+COMPS: 1,2 and also 3 if we put back the (off-cycle)  flow edge into 
+ $get_1$.
+Without putting it back we do not reach \emph{put} of \emph{cycle}.}
+\end{figure}
+
+\begin{figure}[h]
+%Example
+\begin{abs}
+Void cycle(f)      {1:m(f); get$_1$; 2:cycle(f); Put}
+Void m(Future f)  {if (bExpr) {get$_f$; 3: n();}  put}
+\end{abs}
+\caption{\label{example-quasi3}
+  Quasi example 3.
+%Here 
+Method
+$n$ could be flooded if bExpr is true.%, but currently we don't mark the call to $n$ as reachable.
+}
+\end{figure}
+\vfill
 \end{document}
 ============================= end of file ====================================
 
